@@ -1,0 +1,15 @@
+{
+  "name": "resume_refining",
+  "version": "1.0.0",
+  "description": "to filter resume with skills & experiance",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "postinstall": "cd resume-refining && yarn install",
+    "dev": "cd resume-refining && yarn dev",
+    "build": "cd resume-refining && yarn build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
