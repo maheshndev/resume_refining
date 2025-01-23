@@ -245,3 +245,5 @@ app_license = "mit"
 # 	"Logging DocType Name": 30  # days to retain logs
 # }
 
+
+website_route_rules = [{'from_route': '/resume-refining/<path:app_path>', 'to_route': 'resume-refining'}, {'from_route': '/resume-refining/<path:app_path>', 'to_route': 'resume-refining'},]
