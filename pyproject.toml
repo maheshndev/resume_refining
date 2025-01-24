@@ -4,12 +4,11 @@ authors = [
     { name = "AT", email = "write-us@assimilatetechnologies.com"}
 ]
 description = "to filter resume with skills & experiance"
-requires-python = ">=3.9,<3.13.1"
+requires-python = ">=3.9,<3.12"
 readme = "README.md"
 dynamic = ["version"]
 dependencies = [
     # "frappe~=15.0.0" # Installed and managed by bench.
-    "python == 3.9",
     "annotated-types==0.7.0",
     "blinker==1.8.2",
     "blis==1.0.1",
