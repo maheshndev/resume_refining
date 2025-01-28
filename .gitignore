@@ -55,4 +55,4 @@ jspm_packages/
 .aider*
 
 # Directories 
-temp/
+tmp/
