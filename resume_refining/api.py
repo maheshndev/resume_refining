@@ -5,46 +5,79 @@ import spacy
 import docx2txt
 import PyPDF2
 import frappe
-from frappe.utils.response import jsonify
+# from frappe.utils.response import jsonify
+# import jsonify
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 
 nlp = spacy.load("en_core_web_sm")
 model = SentenceTransformer('paraphrase-MiniLM-L6-v2')
 
-TEMP_DIR = '/tmp/temp'
-TEMP_RESUME_DIR = '/tmp/temp_resume'
+TEMP_DIR = os.path.join(frappe.get_app_path('resume_refining'), 'tmp', 'temp')
+TEMP_RESUME_DIR = os.path.join(frappe.get_app_path('resume_refining'), 'tmp', 'temp_resume')
 ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx'}
 
+
+
+# def process_resumes(jd_file=None, jd_text=None, resumes_files=None):
 @frappe.whitelist(allow_guest=True)
-def process_resumes(jd_file=None, jd_text=None, resumes_files=None):
+def process_resumes():
     """
     Frappe version of the process_resumes API
     """
-    os.makedirs(TEMP_DIR, exist_ok=True)
-    os.makedirs(TEMP_RESUME_DIR, exist_ok=True)
+    try:
+        # Ensure the directories exist, if not, create them
+        if not os.path.exists(TEMP_DIR):
+            os.makedirs(TEMP_DIR)
+            frappe.msgprint(f"Created directory: {TEMP_DIR}")
+        
+        if not os.path.exists(TEMP_RESUME_DIR):
+            os.makedirs(TEMP_RESUME_DIR)
+            frappe.msgprint(f"Created directory: {TEMP_RESUME_DIR}")
+    except Exception as e:
+        frappe.throw(f"Error creating directories: {str(e)}")
 
+    # Retrieve files and text from the request
+    jd_file = frappe.request.files.get('jd_file')  # Job description file (single)
+    jd_text = frappe.local.form_dict.get('jd_text')  # Job description text
+    resumes_files = frappe.request.files.getlist('resumes_files')  # Multiple resume files
+
+    # frappe.local.response.headers['Access-Control-Allow-Origin'] = '*'  # Allow all origins
+    # frappe.local.response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'  # Allowed methods
+    # frappe.local.response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'  # Allowed headers
+
+    if frappe.request.method == "OPTIONS":
+        frappe.local.response.headers['Access-Control-Allow-Origin'] = '*'  # Or specify allowed origins
+        frappe.local.response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        frappe.local.response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Frappe-CSRF-Token'
+        return {}
+
+    # Validation for input
     if not jd_text and not jd_file:
-        return jsonify({'Error': '"Job description text or file is required"'}), 400
+        return {'Error': '"Job description text or file is required"'}
     if jd_text and jd_file:
-        return jsonify({'Error': "Cannot send both Job Description text and file. Choose only one."}), 400
+        return {'Error': "Cannot send both Job Description text and file. Choose only one."}
     if not resumes_files:
-        return jsonify({'Error': '"Resume files are required"'}), 400
+        return {'Error': '"Resume files are required"'}
 
+    # Parse job description (text or file)
     try:
         jd_parsed = parse_jd(jd_text=jd_text) if jd_text else parse_jd(jd_file=jd_file)
     except Exception as e:
-        return jsonify({'Error': f"Failed to parse job description: {str(e)}"}), 500
+        return {'Error': f"Failed to parse job description: {str(e)}"}
 
+    # Process the resumes
     resume_scores = []
     for resume_file in resumes_files:
         if not allowed_file(resume_file.filename):
             continue
 
+        # Save the resume file
         resume_path = os.path.join(TEMP_RESUME_DIR, resume_file.filename)
         resume_file.save(resume_path)
 
         try:
+            # Parse the resume file
             resume_parsed = parse_resume(resume_path)
             score = score_resume(jd_parsed, resume_parsed)
             percentage_score = score * 100
@@ -59,12 +92,13 @@ def process_resumes(jd_file=None, jd_text=None, resumes_files=None):
         except Exception as e:
             continue
 
+    # Filter resumes based on experience and required skills
     experience_range = jd_parsed.get('experience', [])
     if experience_range:
         min_experience = min(exp[0] for exp in experience_range)
         max_experience = max(exp[1] for exp in experience_range)
     else:
-        return jsonify({'Error': 'Experience range not found in job description'}), 400
+        return {'Error': 'Experience range not found in job description'}
 
     filtered_resumes = filter_resumes_by_experience(resume_scores, min_experience, max_experience, jd_parsed['jd_required_skills'])
 
@@ -74,6 +108,7 @@ def process_resumes(jd_file=None, jd_text=None, resumes_files=None):
         "GoodMatched": []
     }
 
+    # Categorize the resumes based on the score
     for resume in filtered_resumes:
         score = float(resume['Score'].strip('%'))
         if score >= 80:
@@ -83,17 +118,18 @@ def process_resumes(jd_file=None, jd_text=None, resumes_files=None):
         elif 60 <= score < 70:
             matched_resumes["GoodMatched"].append(resume)
 
-    try:
-        shutil.rmtree(TEMP_DIR, ignore_errors=True)
-        shutil.rmtree(TEMP_RESUME_DIR, ignore_errors=True)
-    except Exception as e:
-        return jsonify({'Error': f"Failed to clear temporary files: {str(e)}"}), 500
+    # Clean up temporary files
+    # try:
+    #     shutil.rmtree(TEMP_DIR, ignore_errors=True)
+    #     shutil.rmtree(TEMP_RESUME_DIR, ignore_errors=True)
+    # except Exception as e:
+    #     return {'Error': f"Failed to clear temporary files: {str(e)}"}
 
     jd_required_skills = jd_parsed['jd_required_skills']
-    return jsonify({
+    return {
         'Matched_Resumes': matched_resumes,
         'jd_required_skills': jd_required_skills
-    })
+    }
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -249,3 +285,5 @@ def filter_resumes_by_experience(resume_scores, min_exp, max_exp, jd_required_sk
             })
             
     return filtered_resumes
+
+print(process_resumes())
