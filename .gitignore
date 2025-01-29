@@ -54,3 +54,6 @@ jspm_packages/
 # Aider AI Chat
 .aider*
 resume_refining/public/node_modules
+
+# Dirrectories
+Users/deepanshulakde/frappe_bench/apps/resume_refining/resume_refining/tmp
