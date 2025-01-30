@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import './App.css'
 import { FrappeProvider } from 'frappe-react-sdk'
-// import {UploadjobDescription} from ''
+import UploadjobDescription from './component/UploadJobDescription'
 
 function App() {
   const [count, setCount] = useState(0)
@@ -9,6 +9,7 @@ function App() {
   return (
 	<div className="App">
 	  <FrappeProvider>
+		<UploadjobDescription/>
 	  </FrappeProvider>
 	</div>
   )
