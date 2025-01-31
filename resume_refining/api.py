@@ -19,8 +19,7 @@ ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx'}
 
 
 
-# def process_resumes(jd_file=None, jd_text=None, resumes_files=None):
-@frappe.whitelist(allow_guest=True)
+@frappe.whitelist()
 def process_resumes():
     """
     Frappe version of the process_resumes API
@@ -61,38 +60,56 @@ def process_resumes():
         return {'Error': '"Resume files are required"'}
 
     # Parse job description (text or file)
+    
     try:
-        jd_parsed = parse_jd(jd_text=jd_text) if jd_text else parse_jd(jd_file=jd_file)
+        if jd_text:
+            jd_parsed = parse_jd(jd_text=jd_text)
+        else:
+            jd_path = os.path.join(TEMP_DIR, jd_file.filename)
+            jd_file.save(jd_path)
+            jd_parsed = parse_jd(jd_file=jd_path)
     except Exception as e:
         return {'Error': f"Failed to parse job description: {str(e)}"}
 
-    # Process the resumes
+    print(f"Job Description Experience: {jd_parsed['experience']}")
+    print(f"Job Description Required Skills: {jd_parsed['jd_required_skills']}")
+
     resume_scores = []
+    print("###################################")
+    print("empty resume Scores", resume_scores)
+    print("###################################")
+
     for resume_file in resumes_files:
         if not allowed_file(resume_file.filename):
             continue
 
-        # Save the resume file
         resume_path = os.path.join(TEMP_RESUME_DIR, resume_file.filename)
         resume_file.save(resume_path)
 
         try:
-            # Parse the resume file
             resume_parsed = parse_resume(resume_path)
+            print(f"Resume Name: {resume_file.filename}")
+            print(f"Parsed Skills: {resume_parsed.get('resume_skills', [])}")
+
             score = score_resume(jd_parsed, resume_parsed)
             percentage_score = score * 100
-            experience_years = resume_parsed.get('total_experience', 0)
+            print(f"Resume Score: {percentage_score:.2f}%")
 
+            experience_years = resume_parsed.get('total_experience', 0)
             resume_scores.append({
                 'Resume_Name': resume_file.filename,
                 'Score': f"{percentage_score:.2f}%",
                 'experience_years': experience_years,
                 'resume_skills': resume_parsed.get('resume_skills', [])
+                
             })
+            print("###################################")
+            print("resume Scores", resume_scores)
+            print("###################################")
         except Exception as e:
+            print(f"Error processing resume {resume_file.filename}: {e}")
             continue
 
-    # Filter resumes based on experience and required skills
     experience_range = jd_parsed.get('experience', [])
     if experience_range:
         min_experience = min(exp[0] for exp in experience_range)
@@ -100,15 +117,22 @@ def process_resumes():
     else:
         return {'Error': 'Experience range not found in job description'}
 
-    filtered_resumes = filter_resumes_by_experience(resume_scores, min_experience, max_experience, jd_parsed['jd_required_skills'])
+    filtered_resumes = filter_resumes_by_experience(resume_scores, min_experience, max_experience,
+                                                    jd_parsed['jd_required_skills'])
+    
+    print("###################################")
+    print("filtered_resumes", filtered_resumes)
+    print("###################################")
+
 
     matched_resumes = {
         "PerfectMatched": [],
         "TopMatched": [],
-        "GoodMatched": []
+        "GoodMatched": [],
+        "PoorMatched": [],
+        "NotGood": []
     }
 
-    # Categorize the resumes based on the score
     for resume in filtered_resumes:
         score = float(resume['Score'].strip('%'))
         if score >= 80:
@@ -117,15 +141,24 @@ def process_resumes():
             matched_resumes["TopMatched"].append(resume)
         elif 60 <= score < 70:
             matched_resumes["GoodMatched"].append(resume)
+        elif 50 <= score < 60:
+            matched_resumes["PoorMatched"].append(resume)
+        elif score < 50:
+            matched_resumes["NotGood"].append(resume)
 
-    # Clean up temporary files
-    # try:
-    #     shutil.rmtree(TEMP_DIR, ignore_errors=True)
-    #     shutil.rmtree(TEMP_RESUME_DIR, ignore_errors=True)
-    # except Exception as e:
-    #     return {'Error': f"Failed to clear temporary files: {str(e)}"}
+    try:
+        shutil.rmtree(TEMP_DIR, ignore_errors=True)
+        shutil.rmtree(TEMP_RESUME_DIR, ignore_errors=True)
+    except Exception as e:
+        return {'Error': f"Failed to clear temporary files: {str(e)}"}
+    
+    print("###################################")
+    print("match Scores", matched_resumes)
+    print("###################################")
 
     jd_required_skills = jd_parsed['jd_required_skills']
+
+
     return {
         'Matched_Resumes': matched_resumes,
         'jd_required_skills': jd_required_skills
@@ -262,6 +295,7 @@ def score_resume(jd_parsed, resume_parsed):
     jd_embedding = model.encode(jd_parsed['raw_text'])
     resume_embedding = model.encode(resume_parsed['raw_text'])
     similarity_score = cosine_similarity([jd_embedding], [resume_embedding])[0][0]
+    print('resume Score', similarity_score)
     return similarity_score
 
 def filter_resumes_by_experience(resume_scores, min_exp, max_exp, jd_required_skills):
@@ -283,7 +317,6 @@ def filter_resumes_by_experience(resume_scores, min_exp, max_exp, jd_required_sk
                 'matched_skills': list_matched_skills,  
                 'matched_count': f'{matched_count} out of {total_jd_skills}',   
             })
-            
     return filtered_resumes
 
-print(process_resumes())
+print('Process Resume: ',process_resumes())
