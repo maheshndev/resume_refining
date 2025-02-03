@@ -56,4 +56,6 @@ jspm_packages/
 resume_refining/public/node_modules
 
 # Dirrectories
-resume_refining/resume_refining/tmp
+tmp
+temp
+temp_resume
