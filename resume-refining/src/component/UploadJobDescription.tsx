@@ -519,6 +519,8 @@ const UploadjobDescription: React.FC = () => {
       setLoading(false);
       return;
     }
+
+    const Token = process.env.AUTH
   
     try {
       const response = await fetch("http://demo.localhost:8000/api/method/resume_refining.api.process_resumes", {
