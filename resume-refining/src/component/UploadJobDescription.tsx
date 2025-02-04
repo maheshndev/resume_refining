@@ -508,10 +508,13 @@ const UploadjobDescription: React.FC = () => {
       formData.append("resumes_files", file);
     });
   
-    let csrfToken = document.querySelector("meta[name='csrf-token']")?.getAttribute("content");
-    if (!csrfToken) {
-      csrfToken = document.cookie.split("; ").find(row => row.startsWith("csrf_token="))?.split("=")[1];
-    }
+    // let csrfToken = document.querySelector("meta[name='csrf-token']")?.getAttribute("content");
+    // if (!csrfToken) {
+    //   csrfToken = document.cookie.split("; ").find(row => row.startsWith("csrf_token="))?.split("=")[1];
+    // }
+
+    const csrfToken = (window as any).csrf_token;
+    console.log("CSRF Token:", csrfToken);
   
     if (!csrfToken) {
       console.error("CSRF token not found...");
@@ -527,7 +530,8 @@ const UploadjobDescription: React.FC = () => {
         method: "POST",
         credentials: "include",
         headers: {
-          "Authorization": "token aff66b7be1f9d81:f186a7be0ec9fc2",
+          // "Authorization": "token aff66b7be1f9d81:f186a7be0ec9fc2",
+          "Authorization": `${Token}`,
           "X-Frappe-CSRF-Token": csrfToken,
         },
         body: formData,
@@ -742,7 +746,7 @@ const UploadjobDescription: React.FC = () => {
                     <thead>
                       <tr>
                         <th className="resume-col" style={{ width: "40%" }}>Resume Name</th>
-                        <th className="score-col" style={{ width: "10%" }}>Score (below 70%)</th>
+                        <th className="score-col" style={{ width: "10%" }}>Score (above 60%)</th>
                         <th className="experience-col" style={{ width: "10%" }}>Experience (years)</th>
                         <th className="matched_skills-col" style={{ width: "10%" }}>Skills Count</th>
                         <th className="matched_skills-col" style={{ width: "20%" }}>Matched Skills</th>
@@ -769,7 +773,7 @@ const UploadjobDescription: React.FC = () => {
                     <thead>
                       <tr>
                         <th className="resume-col" style={{ width: "40%" }}>Resume Name</th>
-                        <th className="score-col" style={{ width: "10%" }}>Score (below 70%)</th>
+                        <th className="score-col" style={{ width: "10%" }}>Score (above 50%)</th>
                         <th className="experience-col" style={{ width: "10%" }}>Experience (years)</th>
                         <th className="matched_skills-col" style={{ width: "10%" }}>Skills Count</th>
                         <th className="matched_skills-col" style={{ width: "20%" }}>Matched Skills</th>
