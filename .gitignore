@@ -53,3 +53,9 @@ jspm_packages/
 
 # Aider AI Chat
 .aider*
+resume_refining/public/node_modules
+
+# Dirrectories
+tmp
+temp
+temp_resume
