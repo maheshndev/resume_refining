@@ -5,6 +5,8 @@ import spacy
 import docx2txt
 import PyPDF2
 import frappe
+from io import BytesIO
+# from frappe.utils.file_manager import save_file
 # from frappe.utils.response import jsonify
 # import jsonify
 from sklearn.metrics.pairwise import cosine_similarity
@@ -15,11 +17,13 @@ model = SentenceTransformer('paraphrase-MiniLM-L6-v2')
 
 TEMP_DIR = os.path.join(frappe.get_app_path('resume_refining'), 'tmp', 'temp')
 TEMP_RESUME_DIR = os.path.join(frappe.get_app_path('resume_refining'), 'tmp', 'temp_resume')
+PERFECT_MATCH_DIR = os.path.join(frappe.get_app_path('resume_refining'), 'tmp', 'perfect_matches')
+TOP_MATCH_DIR = os.path.join(frappe.get_app_path('resume_refining'), 'tmp', 'top_matches')
 ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx'}
 
 
 
-@frappe.whitelist()
+@frappe.whitelist(allow_guest =True)
 def process_resumes():
     """
     Frappe version of the process_resumes API
@@ -28,11 +32,19 @@ def process_resumes():
         # Ensure the directories exist, if not, create them
         if not os.path.exists(TEMP_DIR):
             os.makedirs(TEMP_DIR)
-            frappe.msgprint(f"Created directory: {TEMP_DIR}")
+            # frappe.msgprint(f"Created directory: {TEMP_DIR}")
         
         if not os.path.exists(TEMP_RESUME_DIR):
             os.makedirs(TEMP_RESUME_DIR)
-            frappe.msgprint(f"Created directory: {TEMP_RESUME_DIR}")
+            # frappe.msgprint(f"Created directory: {TEMP_RESUME_DIR}")
+
+        if not os.path.exists(PERFECT_MATCH_DIR):
+            os.makedirs(PERFECT_MATCH_DIR)
+            # frappe.msgprint(f"Created directory for perfect matches: {PERFECT_MATCH_DIR}")
+
+        if not os.path.exists(TOP_MATCH_DIR):
+            os.makedirs(TOP_MATCH_DIR)
+            # frappe.msgprint(f"Created directory for top matches: {TOP_MATCH_DIR}")
     except Exception as e:
         frappe.throw(f"Error creating directories: {str(e)}")
 
@@ -71,13 +83,13 @@ def process_resumes():
     except Exception as e:
         return {'Error': f"Failed to parse job description: {str(e)}"}
 
-    print(f"Job Description Experience: {jd_parsed['experience']}")
-    print(f"Job Description Required Skills: {jd_parsed['jd_required_skills']}")
+    # print(f"Job Description Experience: {jd_parsed['experience']}")
+    # print(f"Job Description Required Skills: {jd_parsed['jd_required_skills']}")
 
     resume_scores = []
-    print("###################################")
-    print("empty resume Scores", resume_scores)
-    print("###################################")
+    # print("###################################")
+    # print("empty resume Scores", resume_scores)
+    # print("###################################")
 
     for resume_file in resumes_files:
         if not allowed_file(resume_file.filename):
@@ -103,9 +115,9 @@ def process_resumes():
                 'resume_skills': resume_parsed.get('resume_skills', [])
                 
             })
-            print("###################################")
-            print("resume Scores", resume_scores)
-            print("###################################")
+            # print("###################################")
+            # print("resume Scores", resume_scores)
+            # print("###################################")
         except Exception as e:
             print(f"Error processing resume {resume_file.filename}: {e}")
             continue
@@ -120,9 +132,9 @@ def process_resumes():
     filtered_resumes = filter_resumes_by_experience(resume_scores, min_experience, max_experience,
                                                     jd_parsed['jd_required_skills'])
     
-    print("###################################")
-    print("filtered_resumes", filtered_resumes)
-    print("###################################")
+    # print("###################################")
+    # print("filtered_resumes", filtered_resumes)
+    # print("###################################")
 
 
     matched_resumes = {
@@ -137,8 +149,10 @@ def process_resumes():
         score = float(resume['Score'].strip('%'))
         if score >= 80:
             matched_resumes["PerfectMatched"].append(resume)
+            save_perfect_match(resume)
         elif 70 <= score < 80:
             matched_resumes["TopMatched"].append(resume)
+            save_top_match(resume)
         elif 60 <= score < 70:
             matched_resumes["GoodMatched"].append(resume)
         elif 50 <= score < 60:
@@ -152,9 +166,9 @@ def process_resumes():
     except Exception as e:
         return {'Error': f"Failed to clear temporary files: {str(e)}"}
     
-    print("###################################")
-    print("match Scores", matched_resumes)
-    print("###################################")
+    # print("###################################")
+    # print("match Scores", matched_resumes)
+    # print("###################################")
 
     jd_required_skills = jd_parsed['jd_required_skills']
 
@@ -166,6 +180,50 @@ def process_resumes():
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def save_perfect_match(resume):
+    """
+    Save perfectly matched resumes to the local directory.
+    """
+    resume_name = resume['resume_name']
+    source_path = os.path.join(TEMP_RESUME_DIR, resume_name)
+    destination_path = os.path.join(PERFECT_MATCH_DIR, resume_name)
+    # if os.path.exists(source_path):
+    #     with open(source_path, 'rb') as f:
+    #         resume_content = f.read()
+    #         save_file(
+    #             # doctype="File",
+    #             name=resume_name,
+    #             content=BytesIO(resume_content),
+    #             folder="Perfect Matches",
+    #             is_private=1
+    #         )
+
+    if os.path.exists(source_path):
+        shutil.copy(source_path, destination_path)
+
+def save_top_match(resume):
+    """
+    Save top matched resumes to the local directory.
+    """
+    resume_name = resume['resume_name']
+    source_path = os.path.join(TEMP_RESUME_DIR, resume_name)
+    destination_path = os.path.join(TOP_MATCH_DIR, resume_name)
+    # if os.path.exists(source_path):
+    #     with open(source_path, 'rb') as f:
+    #         resume_content = f.read()
+    #         save_file(
+    #             # doctype="File",
+    #             name=resume_name,
+    #             content=BytesIO(resume_content),
+    #             folder="Top Matches",
+    #             is_private=1
+    #         )
+    if os.path.exists(source_path):
+        shutil.copy(source_path, destination_path)
+
+    
 
 def extract_experience(text):
     experience_patterns = [
@@ -242,13 +300,13 @@ def parse_jd(jd_file=None, jd_text=None):
 
     doc = nlp(text)
     experience = extract_experience(text)
-    print("Extracted Experience:", experience)
+    # print("Extracted Experience:", experience)
 
     required_skills = re.search(r"(Requisite Skills:|Required Skills:|Must Have:)([\s\S]*?)(?=Preferred Skills|Education|Soft Skills|Roles and Responsibilities|$)", text, re.IGNORECASE)
     required_skills_text = required_skills.group(2).strip() if required_skills else ''
     
     jd_required_skills = extract_skills(required_skills_text)
-    print("Parsed Job Description Skills:", jd_required_skills)
+    # print("Parsed Job Description Skills:", jd_required_skills)
 
     return {
         'raw_text': text,
@@ -283,7 +341,7 @@ def parse_resume(file_path):
 
     total_experience = extract_experience_from_resume(text)
     resume_skills = extract_skills(text)
-    print("Parsed Resume Skills:", resume_skills)
+    # print("Parsed Resume Skills:", resume_skills)
 
     return {
         'raw_text': text,
@@ -292,10 +350,14 @@ def parse_resume(file_path):
     }
 
 def score_resume(jd_parsed, resume_parsed):
+    # print('JD Parsed', jd_parsed)
+    # print('Resume Parsed', resume_parsed)
     jd_embedding = model.encode(jd_parsed['raw_text'])
     resume_embedding = model.encode(resume_parsed['raw_text'])
+    # print('JD Embedding', jd_embedding)
+    # print('Resume Embedding', resume_embedding)
     similarity_score = cosine_similarity([jd_embedding], [resume_embedding])[0][0]
-    print('resume Score', similarity_score)
+    # print('resume Score', similarity_score)
     return similarity_score
 
 def filter_resumes_by_experience(resume_scores, min_exp, max_exp, jd_required_skills):
@@ -308,7 +370,7 @@ def filter_resumes_by_experience(resume_scores, min_exp, max_exp, jd_required_sk
             total_jd_skills = len(jd_required_skills)  
             list_matched_skills = list(matched_skills)
             
-            print(f"Resume: {resume['Resume_Name']}, Matched Skills: {list_matched_skills}, Matched Count: {matched_count} out of {total_jd_skills}")
+            # print(f"Resume: {resume['Resume_Name']}, Matched Skills: {list_matched_skills}, Matched Count: {matched_count} out of {total_jd_skills}")
             
             filtered_resumes.append({
                 'resume_name': resume['Resume_Name'],

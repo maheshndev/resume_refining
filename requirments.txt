@@ -47,3 +47,4 @@ annotated-types==0.7.0
     spacy-legacy
     spacy-loggers
     thinc
+    sentence_transformers
