@@ -23,7 +23,7 @@ ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx'}
 
 
 
-@frappe.whitelist()
+@frappe.whitelist(allow_guest =True)
 def process_resumes():
     """
     Frappe version of the process_resumes API
@@ -83,13 +83,13 @@ def process_resumes():
     except Exception as e:
         return {'Error': f"Failed to parse job description: {str(e)}"}
 
-    print(f"Job Description Experience: {jd_parsed['experience']}")
-    print(f"Job Description Required Skills: {jd_parsed['jd_required_skills']}")
+    # print(f"Job Description Experience: {jd_parsed['experience']}")
+    # print(f"Job Description Required Skills: {jd_parsed['jd_required_skills']}")
 
     resume_scores = []
-    print("###################################")
-    print("empty resume Scores", resume_scores)
-    print("###################################")
+    # print("###################################")
+    # print("empty resume Scores", resume_scores)
+    # print("###################################")
 
     for resume_file in resumes_files:
         if not allowed_file(resume_file.filename):
@@ -115,9 +115,9 @@ def process_resumes():
                 'resume_skills': resume_parsed.get('resume_skills', [])
                 
             })
-            print("###################################")
-            print("resume Scores", resume_scores)
-            print("###################################")
+            # print("###################################")
+            # print("resume Scores", resume_scores)
+            # print("###################################")
         except Exception as e:
             print(f"Error processing resume {resume_file.filename}: {e}")
             continue
@@ -132,9 +132,9 @@ def process_resumes():
     filtered_resumes = filter_resumes_by_experience(resume_scores, min_experience, max_experience,
                                                     jd_parsed['jd_required_skills'])
     
-    print("###################################")
-    print("filtered_resumes", filtered_resumes)
-    print("###################################")
+    # print("###################################")
+    # print("filtered_resumes", filtered_resumes)
+    # print("###################################")
 
 
     matched_resumes = {
@@ -166,9 +166,9 @@ def process_resumes():
     except Exception as e:
         return {'Error': f"Failed to clear temporary files: {str(e)}"}
     
-    print("###################################")
-    print("match Scores", matched_resumes)
-    print("###################################")
+    # print("###################################")
+    # print("match Scores", matched_resumes)
+    # print("###################################")
 
     jd_required_skills = jd_parsed['jd_required_skills']
 
@@ -300,13 +300,13 @@ def parse_jd(jd_file=None, jd_text=None):
 
     doc = nlp(text)
     experience = extract_experience(text)
-    print("Extracted Experience:", experience)
+    # print("Extracted Experience:", experience)
 
     required_skills = re.search(r"(Requisite Skills:|Required Skills:|Must Have:)([\s\S]*?)(?=Preferred Skills|Education|Soft Skills|Roles and Responsibilities|$)", text, re.IGNORECASE)
     required_skills_text = required_skills.group(2).strip() if required_skills else ''
     
     jd_required_skills = extract_skills(required_skills_text)
-    print("Parsed Job Description Skills:", jd_required_skills)
+    # print("Parsed Job Description Skills:", jd_required_skills)
 
     return {
         'raw_text': text,
@@ -341,7 +341,7 @@ def parse_resume(file_path):
 
     total_experience = extract_experience_from_resume(text)
     resume_skills = extract_skills(text)
-    print("Parsed Resume Skills:", resume_skills)
+    # print("Parsed Resume Skills:", resume_skills)
 
     return {
         'raw_text': text,
@@ -350,10 +350,14 @@ def parse_resume(file_path):
     }
 
 def score_resume(jd_parsed, resume_parsed):
+    # print('JD Parsed', jd_parsed)
+    # print('Resume Parsed', resume_parsed)
     jd_embedding = model.encode(jd_parsed['raw_text'])
     resume_embedding = model.encode(resume_parsed['raw_text'])
+    # print('JD Embedding', jd_embedding)
+    # print('Resume Embedding', resume_embedding)
     similarity_score = cosine_similarity([jd_embedding], [resume_embedding])[0][0]
-    print('resume Score', similarity_score)
+    # print('resume Score', similarity_score)
     return similarity_score
 
 def filter_resumes_by_experience(resume_scores, min_exp, max_exp, jd_required_skills):
@@ -366,7 +370,7 @@ def filter_resumes_by_experience(resume_scores, min_exp, max_exp, jd_required_sk
             total_jd_skills = len(jd_required_skills)  
             list_matched_skills = list(matched_skills)
             
-            print(f"Resume: {resume['Resume_Name']}, Matched Skills: {list_matched_skills}, Matched Count: {matched_count} out of {total_jd_skills}")
+            # print(f"Resume: {resume['Resume_Name']}, Matched Skills: {list_matched_skills}, Matched Count: {matched_count} out of {total_jd_skills}")
             
             filtered_resumes.append({
                 'resume_name': resume['Resume_Name'],

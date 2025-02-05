@@ -531,7 +531,7 @@ const UploadjobDescription: React.FC = () => {
         credentials: "include",
         headers: {
           // "Authorization": "token aff66b7be1f9d81:f186a7be0ec9fc2",
-          "Authorization": `${Token}`,
+          // "Authorization": `${Token}`,
           "X-Frappe-CSRF-Token": csrfToken,
         },
         body: formData,
