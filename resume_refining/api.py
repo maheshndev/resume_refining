@@ -1,5 +1,6 @@
 import os
 import re
+import secrets
 import shutil
 import spacy 
 import docx2txt
@@ -15,13 +16,85 @@ from sentence_transformers import SentenceTransformer
 nlp = spacy.load("en_core_web_sm")
 model = SentenceTransformer('paraphrase-MiniLM-L6-v2')
 
-TEMP_DIR = os.path.join(frappe.get_app_path('resume_refining'), 'tmp', 'temp')
-TEMP_RESUME_DIR = os.path.join(frappe.get_app_path('resume_refining'), 'tmp', 'temp_resume')
-PERFECT_MATCH_DIR = os.path.join(frappe.get_app_path('resume_refining'), 'tmp', 'perfect_matches')
-TOP_MATCH_DIR = os.path.join(frappe.get_app_path('resume_refining'), 'tmp', 'top_matches')
+BASE_DIR = frappe.get_app_path('resume_refining')
+
+TMP_DIR = os.path.join(BASE_DIR, 'tmp')
+TEMP_DIR = os.path.join(BASE_DIR, 'tmp', 'temp')
+TEMP_RESUME_DIR = os.path.join(BASE_DIR, 'tmp', 'temp_resume')
+PERFECT_MATCH_DIR = os.path.join(BASE_DIR, 'tmp', 'perfect_matches')
+TOP_MATCH_DIR = os.path.join(BASE_DIR, 'tmp', 'top_matches')
 ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx'}
 
+# 
 
+# FRONTEND_PUBLIC_DIR = os.path.join(BASE_DIR, '..', '..', '..', '..', 'resume-refining', 'public')
+# TEMP_DIR = os.path.join(FRONTEND_PUBLIC_DIR, 'tmp', 'temp')
+# TEMP_RESUME_DIR = os.path.join(FRONTEND_PUBLIC_DIR, 'tmp', 'temp_resume')
+# PERFECT_MATCH_DIR = os.path.join(FRONTEND_PUBLIC_DIR, 'tmp', 'perfect_matches')
+# TOP_MATCH_DIR = os.path.join(FRONTEND_PUBLIC_DIR, 'tmp', 'top_matches')
+# ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx'}
+
+# Whitelisted download paths
+WHITELISTED_DOWNLOAD_PATHS = {
+    "perfect_matches",
+    "top_matches",
+}
+
+# Store tokens mapped to filepaths for secure downloads
+TOKEN_MAP = {}
+
+def generate_download_token(filepath):
+    """Generate a secure token for a given filepath"""
+    token = secrets.token_urlsafe(16)
+    TOKEN_MAP[token] = filepath
+    print(f"Generated token: {token} for filepath: {filepath}", "resume_download") # Debug log
+    return token
+
+def get_download_url(filepath):
+    """Generate a download URL with a secure token."""
+    token = generate_download_token(filepath)
+    # IMPORTANT: Use the CORRECT app name 'resume_refining' in the URL
+    download_url = f"http://demo.localhost:8000/api/method/resume_refining.api.download_matched_resume?token={token}"
+    return download_url
+
+@frappe.whitelist(allow_guest=True)
+def download_matched_resume(token):
+    """Download matched resume securely if the token is valid"""
+    print(f"download_matched_resume called with token: {token}", "resume_download") # Debug log
+    filepath = TOKEN_MAP.get(token)
+    if not filepath:
+        print(f"Invalid token: {token}", "resume_download") # Debug log
+        frappe.throw(("Invalid or expired link"), frappe.PermissionError)
+
+    # Security check: Ensure the filepath is within allowed download paths
+    if not filepath.startswith(TMP_DIR):
+        print(f"Unauthorized path: {filepath}", "resume_download") # Debug log
+        frappe.throw(("Unauthorized path"), frappe.PermissionError)
+
+    relative_path = os.path.relpath(filepath, TMP_DIR)
+    allowed_download = False
+    for allowed_path in WHITELISTED_DOWNLOAD_PATHS:
+        if relative_path.startswith(allowed_path):
+            allowed_download = True
+            break
+
+    if not allowed_download:
+        print(f"Unauthorized folder access for path: {relative_path}", "resume_download") # Debug log
+        frappe.throw(("Unauthorized folder access"), frappe.PermissionError)
+
+    if os.path.exists(filepath):
+        print(f"File exists: {filepath}", "resume_download") # Debug log
+        with open(filepath, "rb") as f:
+            filecontent = f.read()
+        filename = os.path.basename(filepath)
+        frappe.local.response.filename = filename
+        frappe.local.response.filecontent = filecontent
+        frappe.local.response.type = "download"
+        return
+
+    print(f"File not found at path: {filepath}", "resume_download") # Debug log
+    frappe.throw(("File not found"), frappe.FileNotFoundError)
+# edited 
 
 @frappe.whitelist(allow_guest =True)
 def process_resumes():
@@ -148,11 +221,11 @@ def process_resumes():
     for resume in filtered_resumes:
         score = float(resume['Score'].strip('%'))
         if score >= 80:
+            resume['file_url'] = save_perfect_match(resume)
             matched_resumes["PerfectMatched"].append(resume)
-            save_perfect_match(resume)
         elif 70 <= score < 80:
+            resume['file_url'] = save_top_match(resume)
             matched_resumes["TopMatched"].append(resume)
-            save_top_match(resume)
         elif 60 <= score < 70:
             matched_resumes["GoodMatched"].append(resume)
         elif 50 <= score < 60:
@@ -202,6 +275,10 @@ def save_perfect_match(resume):
 
     if os.path.exists(source_path):
         shutil.copy(source_path, destination_path)
+    # file_url = frappe.utils.get_url(f'../resume_refining/tmp/top_matches/{resume_name}')
+    # return file_url
+    download_url = get_download_url(destination_path)
+    return download_url
 
 def save_top_match(resume):
     """
@@ -222,14 +299,24 @@ def save_top_match(resume):
     #         )
     if os.path.exists(source_path):
         shutil.copy(source_path, destination_path)
+    # file_url = frappe.utils.get_url(f'../resume_refinfing/tmp/top_matches/{resume_name}')
+    # return file_url
+    download_url = get_download_url(destination_path)
+    return download_url
 
     
 
 def extract_experience(text):
     experience_patterns = [
-        r'(?i)(?:Work Experience|Professional Experience|Experience|Experience range|Min Experience|Max Experience)\s*[:\-]?\s*(\d+(\.\d+)?)\s*(?:to|-|–)\s*(\d+(\.\d+)?)\s*(?:years|Years)|\b(\d+(\.\d+)?)\+\s*(?:years|Years)|\b(\d+(\.\d+)?)\s*(?:\+)?\s*(?:years|Years)|\b(\d+(\.\d+)?)\s*-\s*(\d+(\.\d+)?)\s*(?:yrs|Years)'
+        r'(?i)(?:Work Experience|Professional Experience|Experience|Experience range|Min Experience|Max Experience|Exp|Min Exp|Max Exp|Experience:|Experience :)\s*[:\-]?\s*(\d+(\.\d+)?)\s*(?:to|-|–)\s*(\d+(\.\d+)?)\s*(?:years|Years)|\b(\d+(\.\d+)?)\+\s*(?:years|Years)|\b(\d+(\.\d+)?)\s*(?:\+)?\s*(?:years|Years)|\b(\d+(\.\d+)?)\s*-\s*(\d+(\.\d+)?)\s*(?:yrs|Years)'
     ]
-
+    # experience_patterns = [
+    # r'(?i)(?:Work Experience|Professional Experience|Experience|Experince|Experience range|Min Experience|Max Experience)\s*[:\-\/]?\s*(\d+(?:\.\d+)?)\s*(?:to|\-|\u2013|\/)\s*(\d+(?:\.\d+)?)\s*(?:year|years|yrs|y)\b|'
+    # r'(\d+(?:\.\d+)?)\+\s*(?:year|years|yrs|y)?\b|'
+    # r'(\d+(?:\.\d+)?)\s*(?:\+)?\s*(?:year|years|yrs|y)?\b|'
+    # r'(\d+(?:\.\d+)?)\s*[\-\/]\s*(\d+(?:\.\d+)?)\s*(?:year|years|yrs|y)?\b|'
+    # r'(?:Exp|Experience|Experince|Min Exp|Max Exp)\s*[:\-\/]?\s*(\d+(?:\.\d+)?)\+?\s*(?:year|years|yrs|y)?\b'
+    # ] 
     extracted_experience = []
     for pattern in experience_patterns:
         matches = re.findall(pattern, text)
@@ -302,7 +389,7 @@ def parse_jd(jd_file=None, jd_text=None):
     experience = extract_experience(text)
     # print("Extracted Experience:", experience)
 
-    required_skills = re.search(r"(Requisite Skills:|Required Skills:|Must Have:)([\s\S]*?)(?=Preferred Skills|Education|Soft Skills|Roles and Responsibilities|$)", text, re.IGNORECASE)
+    required_skills = re.search(r"(Skills :|Skills:|Requisite Skills:|Required Skills:|Must Have:)([\s\S]*?)(?=Preferred Skills|Education|Soft Skills|Roles and Responsibilities|$)", text, re.IGNORECASE)
     required_skills_text = required_skills.group(2).strip() if required_skills else ''
     
     jd_required_skills = extract_skills(required_skills_text)
