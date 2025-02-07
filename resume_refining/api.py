@@ -1,7 +1,8 @@
 import os
 import re
+import secrets
 import shutil
-import spacy 
+import spacy
 import docx2txt
 import PyPDF2
 import frappe
@@ -15,13 +16,152 @@ from sentence_transformers import SentenceTransformer
 nlp = spacy.load("en_core_web_sm")
 model = SentenceTransformer('paraphrase-MiniLM-L6-v2')
 
-TEMP_DIR = os.path.join(frappe.get_app_path('resume_refining'), 'tmp', 'temp')
-TEMP_RESUME_DIR = os.path.join(frappe.get_app_path('resume_refining'), 'tmp', 'temp_resume')
-PERFECT_MATCH_DIR = os.path.join(frappe.get_app_path('resume_refining'), 'tmp', 'perfect_matches')
-TOP_MATCH_DIR = os.path.join(frappe.get_app_path('resume_refining'), 'tmp', 'top_matches')
+BASE_DIR = frappe.get_app_path('resume_refining')
+
+TMP_DIR = os.path.join(BASE_DIR, 'tmp')
+TEMP_DIR = os.path.join(BASE_DIR, 'tmp', 'temp')
+TEMP_RESUME_DIR = os.path.join(BASE_DIR, 'tmp', 'temp_resume')
+PERFECT_MATCH_DIR = os.path.join(BASE_DIR, 'tmp', 'perfect_matches')
+TOP_MATCH_DIR = os.path.join(BASE_DIR, 'tmp', 'top_matches')
 ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx'}
 
+#
 
+# FRONTEND_PUBLIC_DIR = os.path.join(BASE_DIR, '..', '..', '..', '..', 'resume-refining', 'public')
+# TEMP_DIR = os.path.join(FRONTEND_PUBLIC_DIR, 'tmp', 'temp')
+# TEMP_RESUME_DIR = os.path.join(FRONTEND_PUBLIC_DIR, 'tmp', 'temp_resume')
+# PERFECT_MATCH_DIR = os.path.join(FRONTEND_PUBLIC_DIR, 'tmp', 'perfect_matches')
+# TOP_MATCH_DIR = os.path.join(FRONTEND_PUBLIC_DIR, 'tmp', 'top_matches')
+# ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx'}
+
+# Whitelisted download paths
+WHITELISTED_DOWNLOAD_PATHS = {
+    "perfect_matches",
+    "top_matches",
+}
+
+# Store tokens mapped to filepaths for secure downloads and views
+TOKEN_MAP = {}
+
+def generate_download_token(filepath):
+    """Generate a secure token for a given filepath"""
+    token = secrets.token_urlsafe(16)
+    TOKEN_MAP[token] = filepath
+    # print(f"Generated token: {token} for filepath: {filepath}", "resume_download") # Debug log
+    return token
+
+def get_download_url(filepath):
+    """Generate a download URL with a secure token."""
+    token = generate_download_token(filepath)
+    # IMPORTANT: Use the CORRECT app name 'resume_refining' in the URL
+    download_url = f"http://demo.localhost:8000/api/method/resume_refining.api.download_matched_resume?token={token}" # Corrected URL to relative path
+    return download_url
+
+@frappe.whitelist(allow_guest=True)
+def download_matched_resume(token):
+    """Download matched resume securely if the token is valid"""
+    # print(f"download_matched_resume called with token: {token}", "resume_download") # Debug log
+    filepath = TOKEN_MAP.get(token)
+    if not filepath:
+        # print(f"Invalid token: {token}", "resume_download") # Debug log
+        frappe.throw(("Invalid or expired link"), frappe.PermissionError)
+
+    # Security check: Ensure the filepath is within allowed download paths
+    if not filepath.startswith(TMP_DIR):
+        # print(f"Unauthorized path: {filepath}", "resume_download") # Debug log
+        frappe.throw(("Unauthorized path"), frappe.PermissionError)
+
+    relative_path = os.path.relpath(filepath, TMP_DIR)
+    allowed_download = False
+    for allowed_path in WHITELISTED_DOWNLOAD_PATHS:
+        if relative_path.startswith(allowed_path):
+            allowed_download = True
+            break
+
+    if not allowed_download:
+        # print(f"Unauthorized folder access for path: {relative_path}", "resume_download") # Debug log
+        frappe.throw(("Unauthorized folder access"), frappe.PermissionError)
+
+    if os.path.exists(filepath):
+        # print(f"File exists: {filepath}", "resume_download") # Debug log
+        with open(filepath, "rb") as f:
+            filecontent = f.read()
+        filename = os.path.basename(filepath)
+        frappe.local.response.filename = filename
+        frappe.local.response.filecontent = filecontent
+        frappe.local.response.type = "download"
+        return
+
+    # print(f"File not found at path: {filepath}", "resume_download") # Debug log
+    frappe.throw(("File not found"), frappe.FileNotFoundError)
+
+
+def get_view_url(filepath):
+    """Generate a view URL with a secure token."""
+    token = generate_download_token(filepath) # Reuse token generation
+    # IMPORTANT: Use the CORRECT app name 'resume_refining' in the URL for viewing
+    view_url = f"http://demo.localhost:8000/api/method/resume_refining.api.view_matched_resume?token={token}" # Corrected URL to relative path
+    return view_url
+
+@frappe.whitelist(allow_guest=True)
+def view_matched_resume(token):
+    """View matched resume securely if the token is valid by returning file content"""
+    # print(f"view_matched_resume called with token: {token}", "resume_view") # Debug log
+    filepath = TOKEN_MAP.get(token)
+    if not filepath:
+        # print(f"Invalid token: {token}", "resume_view") # Debug log
+        frappe.throw(("Invalid or expired link for viewing"), frappe.PermissionError)
+
+    # Security check: Ensure the filepath is within allowed view paths (same as download for now)
+    if not filepath.startswith(TMP_DIR):
+        # print(f"Unauthorized path for view: {filepath}", "resume_view") # Debug log
+        frappe.throw(("Unauthorized path for viewing"), frappe.PermissionError)
+
+    relative_path = os.path.relpath(filepath, TMP_DIR)
+    allowed_view = False
+    for allowed_path in WHITELISTED_DOWNLOAD_PATHS: # Reuse download whitelist for view
+        if relative_path.startswith(allowed_path):
+            allowed_view = True
+            break
+
+    if not allowed_view:
+        # print(f"Unauthorized folder access for view path: {relative_path}", "resume_view") # Debug log
+        frappe.throw(("Unauthorized folder access for viewing"), frappe.PermissionError)
+
+    if os.path.exists(filepath):
+        # print(f"File exists for view: {filepath}", "resume_view") # Debug log
+        try:
+            if filepath.endswith('.pdf'):
+                content_type = 'application/pdf'
+                with open(filepath, 'rb') as f:
+                    filecontent = f.read()
+            elif filepath.endswith('.docx') or filepath.endswith('.doc'):
+                content_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' if filepath.endswith('.docx') else 'application/msword'
+                with open(filepath, 'rb') as f:
+                    filecontent = f.read()
+            else: # Fallback to text/plain for other file types
+                content_type = 'text/plain'
+                with open(filepath, 'r') as f:
+                    filecontent = f.read() # Read as text
+        except Exception as e:
+            # print(f"Error reading file for view: {e}", "resume_view")
+            frappe.throw(("Error reading file content for viewing"), frappe.InternalServerError)
+
+
+        filename = os.path.basename(filepath)
+
+        return {
+            'file_name': filename,
+            'file_content': frappe.utils.encode(filecontent), # Ensure content is encoded for response
+            'content_type': content_type
+        }
+
+
+    # print(f"File not found at path for view: {filepath}", "resume_view") # Debug log
+    frappe.throw(("File not found for viewing"), frappe.FileNotFoundError)
+
+
+# edited
 
 @frappe.whitelist(allow_guest =True)
 def process_resumes():
@@ -33,7 +173,7 @@ def process_resumes():
         if not os.path.exists(TEMP_DIR):
             os.makedirs(TEMP_DIR)
             # frappe.msgprint(f"Created directory: {TEMP_DIR}")
-        
+
         if not os.path.exists(TEMP_RESUME_DIR):
             os.makedirs(TEMP_RESUME_DIR)
             # frappe.msgprint(f"Created directory: {TEMP_RESUME_DIR}")
@@ -72,7 +212,7 @@ def process_resumes():
         return {'Error': '"Resume files are required"'}
 
     # Parse job description (text or file)
-    
+
     try:
         if jd_text:
             jd_parsed = parse_jd(jd_text=jd_text)
@@ -113,7 +253,7 @@ def process_resumes():
                 'Score': f"{percentage_score:.2f}%",
                 'experience_years': experience_years,
                 'resume_skills': resume_parsed.get('resume_skills', [])
-                
+
             })
             # print("###################################")
             # print("resume Scores", resume_scores)
@@ -131,7 +271,7 @@ def process_resumes():
 
     filtered_resumes = filter_resumes_by_experience(resume_scores, min_experience, max_experience,
                                                     jd_parsed['jd_required_skills'])
-    
+
     # print("###################################")
     # print("filtered_resumes", filtered_resumes)
     # print("###################################")
@@ -148,11 +288,15 @@ def process_resumes():
     for resume in filtered_resumes:
         score = float(resume['Score'].strip('%'))
         if score >= 80:
+            resume_data = save_perfect_match(resume) # Get both URLs
+            resume['file_url'] = resume_data['file_url']
+            resume['view_url'] = resume_data['view_url']
             matched_resumes["PerfectMatched"].append(resume)
-            save_perfect_match(resume)
         elif 70 <= score < 80:
+            resume_data = save_top_match(resume) # Get both URLs
+            resume['file_url'] = resume_data['file_url']
+            resume['view_url'] = resume_data['view_url']
             matched_resumes["TopMatched"].append(resume)
-            save_top_match(resume)
         elif 60 <= score < 70:
             matched_resumes["GoodMatched"].append(resume)
         elif 50 <= score < 60:
@@ -165,7 +309,7 @@ def process_resumes():
         shutil.rmtree(TEMP_RESUME_DIR, ignore_errors=True)
     except Exception as e:
         return {'Error': f"Failed to clear temporary files: {str(e)}"}
-    
+
     # print("###################################")
     # print("match Scores", matched_resumes)
     # print("###################################")
@@ -184,52 +328,54 @@ def allowed_file(filename):
 
 def save_perfect_match(resume):
     """
-    Save perfectly matched resumes to the local directory.
+    Save perfectly matched resumes to the local directory and return download and view URLs.
     """
     resume_name = resume['resume_name']
     source_path = os.path.join(TEMP_RESUME_DIR, resume_name)
     destination_path = os.path.join(PERFECT_MATCH_DIR, resume_name)
-    # if os.path.exists(source_path):
-    #     with open(source_path, 'rb') as f:
-    #         resume_content = f.read()
-    #         save_file(
-    #             # doctype="File",
-    #             name=resume_name,
-    #             content=BytesIO(resume_content),
-    #             folder="Perfect Matches",
-    #             is_private=1
-    #         )
 
     if os.path.exists(source_path):
         shutil.copy(source_path, destination_path)
 
+    download_url = get_download_url(destination_path)
+    view_url = get_view_url(destination_path)      # New view URL
+
+    return { # Return both URLs
+        'file_url': download_url,
+        'view_url': view_url
+    }
+
 def save_top_match(resume):
     """
-    Save top matched resumes to the local directory.
+    Save top matched resumes to the local directory and return download and view URLs.
     """
     resume_name = resume['resume_name']
     source_path = os.path.join(TEMP_RESUME_DIR, resume_name)
     destination_path = os.path.join(TOP_MATCH_DIR, resume_name)
-    # if os.path.exists(source_path):
-    #     with open(source_path, 'rb') as f:
-    #         resume_content = f.read()
-    #         save_file(
-    #             # doctype="File",
-    #             name=resume_name,
-    #             content=BytesIO(resume_content),
-    #             folder="Top Matches",
-    #             is_private=1
-    #         )
+
     if os.path.exists(source_path):
         shutil.copy(source_path, destination_path)
 
-    
+    download_url = get_download_url(destination_path)
+    view_url = get_view_url(destination_path)      # New view URL
+    return { # Return both URLs
+        'file_url': download_url,
+        'view_url': view_url
+    }
+
+
 
 def extract_experience(text):
     experience_patterns = [
-        r'(?i)(?:Work Experience|Professional Experience|Experience|Experience range|Min Experience|Max Experience)\s*[:\-]?\s*(\d+(\.\d+)?)\s*(?:to|-|–)\s*(\d+(\.\d+)?)\s*(?:years|Years)|\b(\d+(\.\d+)?)\+\s*(?:years|Years)|\b(\d+(\.\d+)?)\s*(?:\+)?\s*(?:years|Years)|\b(\d+(\.\d+)?)\s*-\s*(\d+(\.\d+)?)\s*(?:yrs|Years)'
+        r'(?i)(?:Work Experience|Professional Experience|Experience|Experience range|Min Experience|Max Experience|Exp|Min Exp|Max Exp|Experience:|Experience :)\s*[:\-]?\s*(\d+(\.\d+)?)\s*(?:to|-|–)\s*(\d+(\.\d+)?)\s*(?:years|Years)|\b(\d+(\.\d+)?)\+\s*(?:years|Years)|\b(\d+(\.\d+)?)\s*(?:\+)?\s*(?:years|Years)|\b(\d+(\.\d+)?)\s*-\s*(\d+(\.\d+)?)\s*(?:yrs|Years)'
     ]
-
+    # experience_patterns = [
+    # r'(?i)(?:Work Experience|Professional Experience|Experience|Experince|Experience range|Min Experience|Max Experience)\s*[:\-\/]?\s*(\d+(?:\.\d+)?)\s*(?:to|\-|\u2013|\/)\s*(\d+(?:\.\d+)?)\s*(?:year|years|yrs|y)\b|'
+    # r'(\d+(?:\.\d+)?)\+\s*(?:year|years|yrs|y)?\b|'
+    # r'(\d+(?:\.\d+)?)\s*(?:\+)?\s*(?:year|years|yrs|y)?\b|'
+    # r'(\d+(?:\.\d+)?)\s*[\-\/]\s*(\d+(?:\.\d+)?)\s*(?:year|years|yrs|y)?\b|'
+    # r'(?:Exp|Experience|Experince|Min Exp|Max Exp)\s*[:\-\/]?\s*(\d+(?:\.\d+)?)\+?\s*(?:year|years|yrs|y)?\b'
+    # ]
     extracted_experience = []
     for pattern in experience_patterns:
         matches = re.findall(pattern, text)
@@ -268,17 +414,17 @@ def extract_skills(skills_text):
     doc = nlp(skills_text)
     excluded_tokens = ['NOUN', 'ADJ', 'PRON', 'CONJ', 'SCONJ', 'ADP', 'AUX', 'VERB', 'DET', 'CCONJ']
     excluded_symbols = ['etc','to','to', '(', ')', '-', '_', '.', '/', ',', 'e.g.', '\n', ':', '’s',
-                        'to', 'hands','indepth','+', '2', 'complete','master', 'bachelor’s/', 'bachelor', 
-                        'engineering/',' ','3','', 'independently', 'ip', 'identity', 'closely', 'http', 
-                        'framework', 'one', 'highly', 'pipeline', 'serverless', 'strong', 'compute', 'code', 
-                        'experience', 'web', 'storage', 'also', 'lambda', 'access', 'simple', 
-                        'quickly', 'especially', 'certification', 'elastic', 'developer', 'information', 
-                        'infrastructure', 'iam', 'service', 'effectively','management', 'dependency', 'entity', 
+                        'to', 'hands','indepth','+', '2', 'complete','master', 'bachelor’s/', 'bachelor',
+                        'engineering/',' ','3','', 'independently', 'ip', 'identity', 'closely', 'http',
+                        'framework', 'one', 'highly', 'pipeline', 'serverless', 'strong', 'compute', 'code',
+                        'experience', 'web', 'storage', 'also', 'lambda', 'access', 'simple',
+                        'quickly', 'especially', 'certification', 'elastic', 'developer', 'information',
+                        'infrastructure', 'iam', 'service', 'effectively','management', 'dependency', 'entity',
                         '10', 'core', 'parallel', 'async', 'basics', 'security', 'patterns', 'json','good',
                         '!','~','`','@','$','%','^','*',]
 
     excluded_symbols.extend(str(num) for num in range(1, 100001))
-    
+
     skills = [token.text.lower() for token in doc if token.pos_ not in excluded_tokens and token.text.lower() not in excluded_symbols]
     return list(set(skills))
 
@@ -302,9 +448,9 @@ def parse_jd(jd_file=None, jd_text=None):
     experience = extract_experience(text)
     # print("Extracted Experience:", experience)
 
-    required_skills = re.search(r"(Requisite Skills:|Required Skills:|Must Have:)([\s\S]*?)(?=Preferred Skills|Education|Soft Skills|Roles and Responsibilities|$)", text, re.IGNORECASE)
+    required_skills = re.search(r"(Skills :|Skills:|Requisite Skills:|Required Skills:|Must Have:)([\s\S]*?)(?=Preferred Skills|Education|Soft Skills|Roles and Responsibilities|$)", text, re.IGNORECASE)
     required_skills_text = required_skills.group(2).strip() if required_skills else ''
-    
+
     jd_required_skills = extract_skills(required_skills_text)
     # print("Parsed Job Description Skills:", jd_required_skills)
 
@@ -316,9 +462,9 @@ def parse_jd(jd_file=None, jd_text=None):
 
 def extract_experience_from_resume(text):
     experience_years = []
-    
+
     experience_patterns = [
-        r'(\d+(?:\.\d+)?\+?)\s*(?:years?|yr|yrs|years of experience|years\' experience)', 
+        r'(\d+(?:\.\d+)?\+?)\s*(?:years?|yr|yrs|years of experience|years\' experience)',
     ]
 
     for pattern in experience_patterns:
@@ -367,18 +513,18 @@ def filter_resumes_by_experience(resume_scores, min_exp, max_exp, jd_required_sk
         if min_exp <= exp_years <= max_exp:
             matched_skills = set(jd_required_skills).intersection(set(map(str.lower, resume['resume_skills'])))
             matched_count = len(matched_skills)
-            total_jd_skills = len(jd_required_skills)  
+            total_jd_skills = len(jd_required_skills)
             list_matched_skills = list(matched_skills)
-            
+
             # print(f"Resume: {resume['Resume_Name']}, Matched Skills: {list_matched_skills}, Matched Count: {matched_count} out of {total_jd_skills}")
-            
+
             filtered_resumes.append({
                 'resume_name': resume['Resume_Name'],
                 'Score': resume['Score'],
                 'experience_years': resume['experience_years'],
-                'matched_skills': list_matched_skills,  
-                'matched_count': f'{matched_count} out of {total_jd_skills}',   
+                'matched_skills': list_matched_skills,
+                'matched_count': f'{matched_count} out of {total_jd_skills}',
             })
     return filtered_resumes
 
-print('Process Resume: ',process_resumes())
+# print('Process Resume: ',process_resumes())

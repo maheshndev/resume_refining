@@ -186,3 +186,112 @@ input[type="file"] {
   }
 }
 
+/* existing styles ... */
+
+/* Modal styles */
+.modal {
+  position: fixed; /* Stay in place */
+  z-index: 1; /* Sit on top */
+  left: 0;
+  top: 0;
+  width: 100%; /* Full width */
+  height: 100%; /* Full height */
+  overflow: auto; /* Enable scroll if needed */
+  background-color: rgb(0,0,0); /* Fallback color */
+  background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+}
+
+.modal-content {
+  background-color: #fefefe;
+  margin: 10% auto; /* 15% from the top and centered */
+  padding: 20px;
+  border: 1px solid #888;
+  width: 80%; /* Could be more or less, depending on screen size */
+  position: relative;
+}
+
+.close-button {
+  color: #aaa;
+  float: right;
+  font-size: 28px;
+  font-weight: bold;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.close-button:hover,
+.close-button:focus {
+  color: black;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.modal-header, .modal-footer {
+  padding: 10px 16px;
+  /* background-color: #5cb85c;
+  color: white; */
+}
+
+.modal-body {
+  padding: 20px 16px;
+}
+
+.modal-footer {
+  /* background-color: #f9f9f9;
+  border-top: 1px solid #eee; */
+  text-align: right;
+}
+
+.modal-title {
+  margin: 0;
+}
+
+.download-button {
+  margin-left: 10px;
+}
+
+.resume-preview-iframe {
+  border-radius: 10px; /* Round corners */
+  box-shadow: 5px 5px 15px rgba(0,0,0,0.3); /* Shadow effect */
+  border: none; /* Remove default iframe border if you want */
+}
+
+
+
+/* --- JD Skills Section Styles --- */
+.jd-skills-section {
+  margin-top: 2rem;
+}
+
+.jd-skills-section h2 {
+  font-size: 1.3rem;
+  margin-bottom: 1rem;
+  color: #555;
+}
+
+.jd-skills-display {
+  display: flex;
+  flex-wrap: wrap; /* Allow skills to wrap to the next line */
+  gap: 0.5rem; /* Spacing between skill chips */
+}
+
+
+.skill-chip { /* Reusing skill-chip class for general skill styling, refine if needed */
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.5rem;
+  background-color: #e9ecef;
+  border-radius: 0.25rem;
+  margin-right: 0.5rem;
+  margin-bottom: 0.2rem;
+  border: 1px solid #ced4da;
+  font-size: 0.875rem;
+}
+
+
+.jd-skill-chip { /* Optional: Style JD skills chips differently if desired */
+  background-color: #b6b6b616; /* Light green background for JD skills example */
+  border-color: #65656500;
+  color: #333;
+}
