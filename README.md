@@ -6,7 +6,6 @@ to filter resume with skills & experiance
 <img width="1440" alt="Screenshot 2025-02-07 at 5 17 28 PM" src="https://github.com/user-attachments/assets/1581ef72-f6cb-4a2a-9571-17734d7d4c8f" />
 <img width="629" alt="Screenshot 2025-02-07 at 5 20 29 PM" src="https://github.com/user-attachments/assets/56d7c27a-56ef-48b9-9992-c0eb4d066510" />
 
-
 ### Installation
 
 You can install this app using the [bench](https://github.com/frappe/bench) CLI:
