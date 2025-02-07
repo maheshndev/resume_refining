@@ -1,6 +1,7 @@
 ### Resume Refining
 
 to filter resume with skills & experiance
+![image](https://github.com/user-attachments/assets/844f4d51-55b2-4091-a7cb-3aadc57682d9)
 
 ### Installation
 
