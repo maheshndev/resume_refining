@@ -1,10 +1,14 @@
 ### Resume Refining
 
-to filter resume with skills & experiance
+To filter resume with skills & experiance
+
+![image](https://github.com/user-attachments/assets/844f4d51-55b2-4091-a7cb-3aadc57682d9)
+
 
 ### Installation
 
 You can install this app using the [bench](https://github.com/frappe/bench) CLI:
+
 
 ```bash
 cd $PATH_TO_YOUR_BENCH
