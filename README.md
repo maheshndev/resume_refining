@@ -3,6 +3,9 @@
 to filter resume with skills & experiance
 ![image](https://github.com/user-attachments/assets/844f4d51-55b2-4091-a7cb-3aadc57682d9)
 
+<img width="1440" alt="Screenshot 2025-02-07 at 5 17 28 PM" src="https://github.com/user-attachments/assets/1581ef72-f6cb-4a2a-9571-17734d7d4c8f" />
+
+
 ### Installation
 
 You can install this app using the [bench](https://github.com/frappe/bench) CLI:
