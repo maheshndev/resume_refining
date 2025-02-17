@@ -4,52 +4,20 @@ authors = [
     { name = "AT", email = "write-us@assimilatetechnologies.com"}
 ]
 description = "to filter resume with skills & experiance"
-requires-python = ">=3.10"
+requires-python = ">=3.8,<3.12"
 readme = "README.md"
 dynamic = ["version"]
 dependencies = [
-    # "frappe~=15.0.0" # Installed and managed by bench.
-    "annotated-types==0.7.0",
-    "blinker==1.8.2",
-    "blis==1.0.1",
-    "catalogue==2.0.10",
-    "certifi==2024.8.30",
-    "charset-normalizer==3.4.0",
-    "click==8.1.7",
-    "cloudpathlib==0.19.0",
-    "colorama==0.4.6",
-    "confection==0.1.5",
-    "cymem==2.0.8",
-    "docx2txt==0.8",
+    
+    "docx2txt~=0.8",
+    "pypdf~=3.0",
     "en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl#sha256=1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85",
-    "idna==3.10",
-    "itsdangerous==2.2.0",
-    "joblib==1.4.2",
-    "langcodes==3.4.1",
-    "language_data==1.2.0",
-    "marisa-trie==1.2.1",
-    "markdown-it-py==3.0.0",
-    "MarkupSafe==3.0.1",
-    "mdurl==0.1.2",
-    "murmurhash==1.0.10",
-    "pydantic==2.9.2",
-    "pydantic_core==2.23.4",
-    "Pygments==2.18.0",
-    "pypdf==3.17.4",
-    "requests==2.32.3",
-    "rich==13.9.2",
-    "scikit-learn==1.5.2",
-    "scipy==1.14.1",
-    "setuptools==75.1.0",
-    "shellingham==1.5.4",
-    "smart-open==7.0.5",
-    "srsly==2.4.8",
-    "threadpoolctl==3.5.0",
-    "tqdm==4.66.5",
-    "typer==0.12.5",
-    "typing_extensions==4.12.2",
+    "requests~=2.32.3",
+    "scikit-learn~=1.0",
+    "scipy~=1.14.1",
     "spacy~=3.8.2",
-    "sentence_transformers= {version = '^2.2.2', extras = ['minimal'], optional = true}"
+    "tqdm~=4.66.5"
+    "sentence_transformers~=2.2.2"
 ]
 
 [build-system]
