@@ -17,7 +17,7 @@ dependencies = [
     "scipy~=1.14.1",
     "spacy~=3.8.2",
     "tqdm~=4.66.5"
-    "sentence_transformers~=2.2.2"
+    "sentence_transformers~=3.4.0"
 ]
 
 [build-system]
