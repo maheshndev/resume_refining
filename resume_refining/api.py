@@ -4,7 +4,7 @@ import secrets
 import shutil
 import spacy
 import docx2txt
-import PyPDF2
+import pypdf
 import frappe
 from io import BytesIO
 # from frappe.utils.file_manager import save_file
