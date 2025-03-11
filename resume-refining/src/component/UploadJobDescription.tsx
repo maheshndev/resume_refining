@@ -355,7 +355,7 @@
 // Frontend v3.0
 
 // frontend code
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import "./uploadescription.css";
 
 type MatchedData = {
@@ -400,6 +400,11 @@ type MatchedData = {
     }[];
 };
 
+type JobOption = {
+    job_title: string;
+    description: string;
+};
+
 const UploadjobDescription: React.FC = () => {
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [jobDescFile, setJobDescFile] = useState<File | null>(null);
@@ -408,14 +413,63 @@ const UploadjobDescription: React.FC = () => {
     const [loading, setLoading] = useState<boolean>(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [jdSkills, setJdSkills] = useState<string[]>([]);
-
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [viewFileContent, setViewFileContent] = useState<any | null>(null);
     const [viewFileName, setViewFileName] = useState<string | null>(null);
     const [viewFileContentType, setViewFileContentType] = useState<string | null>(null);
+    // drop-down data 
+    const [jobOptions, setJobOptions] = useState<JobOption[]>([]);
+    const [selectedJobTitle, setSelectedJobTitle] = useState<string>("");
 
     const resumeInputRef = useRef<HTMLInputElement | null>(null);
     const jdFileInputRef = useRef<HTMLInputElement | null>(null);
+
+    useEffect(() => {
+        const fetchJobOptions = async () => {
+            try {
+                setLoading(true);
+                // const csrfToken = (window as any).csrf_token;
+                
+                const response = await fetch(
+                    "/api/method/resume_refining.api.get_all_records", // Adjust API endpoint as needed
+                    {
+                        method: "GET",
+                        credentials: "include",
+                        headers: {
+                            // "X-Frappe-CSRF-Token": csrfToken,
+                            "Content-Type": "application/json",
+                        },
+                    }
+                );
+
+                if (!response.ok) {
+                    throw new Error("Failed to fetch job options");
+                }
+
+                const data = await response.json();
+                // Set the job options directly from the message array
+                setJobOptions(data.message || []);
+                console.log("Fetched job options:", data.message);
+            } catch (error: any) {
+                console.error("Error fetching job options:", error);
+                setErrorMessage("Failed to load job options");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchJobOptions();
+    }, []);
+
+    const handleJobTitleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        setSelectedJobTitle(e.target.value);
+        // If you want to automatically populate the job description textarea
+        const selectedJob = jobOptions.find(job => job.job_title === e.target.value);
+        if (selectedJob) {
+            setJdText(selectedJob.description);
+            setJobDescFile(null); // Clear any uploaded file if selecting from dropdown
+        }
+    };
 
     const handleResumesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
@@ -643,6 +697,25 @@ const UploadjobDescription: React.FC = () => {
 
                 <div className="card-body">
                     <form onSubmit={handleSubmit} encType="multipart/form-data">
+                    <div className="form-group">
+                            <label htmlFor="job_title_select">
+                                <strong>{"Select Job Title"}</strong>
+                            </label>
+                            <select
+                                id="job_title_select"
+                                className="form-control"
+                                value={selectedJobTitle}
+                                onChange={handleJobTitleChange}
+                                required
+                            >
+                                <option value="">Select a job title</option>
+                                {jobOptions.map((option, index) => (
+                                    <option key={index} value={option.job_title}>
+                                        {option.job_title}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                         <div className="form-group">
                             <label htmlFor="jd_text">
                                 <strong>{"Job Description"}</strong>
