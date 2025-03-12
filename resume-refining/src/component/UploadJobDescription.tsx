@@ -1,3 +1,4 @@
+
 // import React, { useState, useRef } from "react";
 // import "./uploadescription.css";
 
@@ -356,6 +357,7 @@
 
 // frontend code
 import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import "./uploadescription.css";
 
 type MatchedData = {
@@ -525,24 +527,23 @@ const UploadjobDescription: React.FC = () => {
             formData.append("resumes_files", file);
         });
 
-        const csrfToken = (window as any).csrf_token;
-        console.log("CSRF Token:", csrfToken);
+        // const csrfToken = (window as any).csrf_token;
+        // console.log("CSRF Token:", csrfToken);
 
-        if (!csrfToken) {
-            console.error("CSRF token not found...");
-            setErrorMessage("CSRF token is missing. Please refresh the page.");
-            setLoading(false);
-            return;
-        }
+        // if (!csrfToken) {
+        //     console.error("CSRF token not found...");
+        //     setErrorMessage("CSRF token is missing. Please refresh the page.");
+        //     setLoading(false);
+        //     return;
+        // }
 
         try {
-            const response = await fetch(
-                "/api/method/resume_refining.api.process_resumes",
+            const response = await fetch("/api/method/resume_refining.api.process_resumes",
                 {
                     method: "POST",
                     credentials: "include",
                     headers: {
-                        "X-Frappe-CSRF-Token": csrfToken,
+                        // "X-Frappe-CSRF-Token": csrfToken,
                     },
                     body: formData,
                 }
