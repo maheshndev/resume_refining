@@ -12,6 +12,7 @@ from io import BytesIO
 # import jsonify
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
+from bs4 import BeautifulSoup
 
 nlp = spacy.load("en_core_web_sm")
 model = SentenceTransformer('paraphrase-MiniLM-L6-v2')
@@ -161,6 +162,44 @@ def view_matched_resume(token):
     frappe.throw(("File not found for viewing"), frappe.FileNotFoundError)
 
 
+
+# def get_all_records():
+#     data = frappe.get_all("Job Opening", fields=["job_title", "description","status"])
+
+#     return data
+
+def strip_html(text):
+    soup = BeautifulSoup(text, 'html.parser')
+    return soup.get_text()
+
+# def get_open_jobbs():
+#     open_job = []
+#     for i in get_all_records():
+#         if i.status == "Open":
+#             open_job.append(i.job_title)
+#     return open_job
+@frappe.whitelist(allow_guest=True)
+def get_all_records():
+    try: 
+        data = frappe.get_all("Job Opening", filters={"status": "Open"}, fields=["job_title", "description"])
+        cleaned_data = [{"job_title": item["job_title"], "description": strip_html(item["description"])} for item in data]
+        return cleaned_data
+    except Exception as e:
+        frappe.throw(f"Error fetching job openings: {str(e)}")
+
+
+@frappe.whitelist(allow_guest=True)
+def get_job_applicants():
+    applicants = frappe.get_all(
+        "Job Applicant", 
+        fields=["applicant_name", "email_id", "resume_attachment"]
+    )
+
+    if not applicants:
+        return "No Job Applicants Found"
+
+    return applicants 
+
 # edited
 
 @frappe.whitelist(allow_guest =True)
@@ -187,11 +226,17 @@ def process_resumes():
             # frappe.msgprint(f"Created directory for top matches: {TOP_MATCH_DIR}")
     except Exception as e:
         frappe.throw(f"Error creating directories: {str(e)}")
-
+    
+   
+        
+    # job_Data = get_all_records()
     # Retrieve files and text from the request
+    # jd_job_title = frappe.local.form_dict.get('jd_job_title')  # Job title
     jd_file = frappe.request.files.get('jd_file')  # Job description file (single)
     jd_text = frappe.local.form_dict.get('jd_text')  # Job description text
     resumes_files = frappe.request.files.getlist('resumes_files')  # Multiple resume files
+    # for i in job_Data:
+    #     if i.job_
 
     # frappe.local.response.headers['Access-Control-Allow-Origin'] = '*'  # Allow all origins
     # frappe.local.response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'  # Allowed methods
@@ -202,24 +247,28 @@ def process_resumes():
         frappe.local.response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
         frappe.local.response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Frappe-CSRF-Token'
         return {}
-
+    
+    # jd_data = get_all_records()
+    # print("JD Data", jd_data)
+    
+    # for i in jd_data:
+    #     if i.status == "Open" and i.job_title == jd_job_title:
+    #         cleaned_jd_text = clean_html(i.description)
+    
     # Validation for input
-    if not jd_text and not jd_file:
-        return {'Error': '"Job description text or file is required"'}
-    if jd_text and jd_file:
-        return {'Error': "Cannot send both Job Description text and file. Choose only one."}
-    if not resumes_files:
-        return {'Error': '"Resume files are required"'}
+    # if not jd_text and not jd_file:
+    #     return {'Error': '"Job description text or file is required"'}
+    # if jd_text and jd_file:
+    #     return {'Error': "Cannot send both Job Description text and file. Choose only one."}
+    # if not resumes_files:
+    #     return {'Error': '"Resume files are required"'}
 
     # Parse job description (text or file)
+
 
     try:
         if jd_text:
             jd_parsed = parse_jd(jd_text=jd_text)
-        else:
-            jd_path = os.path.join(TEMP_DIR, jd_file.filename)
-            jd_file.save(jd_path)
-            jd_parsed = parse_jd(jd_file=jd_path)
     except Exception as e:
         return {'Error': f"Failed to parse job description: {str(e)}"}
 
