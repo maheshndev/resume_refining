@@ -180,7 +180,8 @@ app_license = "mit"
 override_whitelisted_methods = {
 	"process_resumes": "resume_refining.api.process_resumes",
     "get_jd": "resume_refining.api.get_all_records",
-    "get_applicants": "resume_refining.api.get_job_applicants"
+    "get_applicants": "resume_refining.api.get_job_applicants",
+    "shortlisted_candidates": "resume_refining.api.save_shortlisted_candidates"
 }
 #
 # each overriding function accepts a `data` argument;

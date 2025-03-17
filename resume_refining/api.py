@@ -4,7 +4,7 @@ import secrets
 import shutil
 import spacy
 import docx2txt
-import PyPDF2
+import pypdf
 import frappe
 from io import BytesIO
 # from frappe.utils.file_manager import save_file
@@ -17,29 +17,13 @@ from bs4 import BeautifulSoup
 nlp = spacy.load("en_core_web_sm")
 model = SentenceTransformer('paraphrase-MiniLM-L6-v2')
 
-BASE_DIR = frappe.get_app_path('resume_refining')
 
-TMP_DIR = os.path.join(BASE_DIR, 'tmp')
-TEMP_DIR = os.path.join(BASE_DIR, 'tmp', 'temp')
-TEMP_RESUME_DIR = os.path.join(BASE_DIR, 'tmp', 'temp_resume')
-PERFECT_MATCH_DIR = os.path.join(BASE_DIR, 'tmp', 'perfect_matches')
-TOP_MATCH_DIR = os.path.join(BASE_DIR, 'tmp', 'top_matches')
-ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx'}
-
-#
-
-# FRONTEND_PUBLIC_DIR = os.path.join(BASE_DIR, '..', '..', '..', '..', 'resume-refining', 'public')
-# TEMP_DIR = os.path.join(FRONTEND_PUBLIC_DIR, 'tmp', 'temp')
-# TEMP_RESUME_DIR = os.path.join(FRONTEND_PUBLIC_DIR, 'tmp', 'temp_resume')
-# PERFECT_MATCH_DIR = os.path.join(FRONTEND_PUBLIC_DIR, 'tmp', 'perfect_matches')
-# TOP_MATCH_DIR = os.path.join(FRONTEND_PUBLIC_DIR, 'tmp', 'top_matches')
-# ALLOWED_EXTENSIONS = {'pdf', 'doc', 'docx'}
-
-# Whitelisted download paths
-WHITELISTED_DOWNLOAD_PATHS = {
-    "perfect_matches",
-    "top_matches",
-}
+SITE_URL = frappe.utils.get_url()
+# Define paths
+BASE_DIR = frappe.get_app_path("resume_refining")
+TMP_DIR = frappe.get_site_path("private", "files")
+WHITELISTED_DOWNLOAD_PATHS = ["resumes", "processed_resumes"]
+ALLOWED_EXTENSIONS = {"pdf", "doc", "docx"}
 
 # Store tokens mapped to filepaths for secure downloads and views
 TOKEN_MAP = {}
@@ -48,129 +32,97 @@ def generate_download_token(filepath):
     """Generate a secure token for a given filepath"""
     token = secrets.token_urlsafe(16)
     TOKEN_MAP[token] = filepath
-    # print(f"Generated token: {token} for filepath: {filepath}", "resume_download") # Debug log
     return token
 
-def get_download_url(filepath):
-    """Generate a download URL with a secure token."""
-    token = generate_download_token(filepath)
-    # IMPORTANT: Use the CORRECT app name 'resume_refining' in the URL
-    download_url = f"http://demo.localhost:8000/api/method/resume_refining.api.download_matched_resume?token={token}" # Corrected URL to relative path
-    return download_url
+def resolve_file_path(resume_url):
+    """Determine file type and absolute path"""
+    filename = os.path.basename(resume_url)
+
+    if resume_url.startswith("/private/files/"):
+        file_type = "private"
+        file_path = frappe.get_site_path("private", "files", filename)
+    else:
+        file_type = "public"
+        file_path = frappe.get_site_path("public", "files", filename)
+
+    return file_type, file_path, filename
+
+def get_secure_download_url(resume_url):
+    """Generate a secure download URL"""
+    file_type, file_path, filename = resolve_file_path(resume_url)
+    token = generate_download_token(file_path)
+    site_url = frappe.utils.get_url()
+    return f"{site_url}/api/method/resume_refining.api.download_matched_resume?token={token}"
+
+def get_secure_view_url(resume_url):
+    """Generate a secure view URL"""
+    file_type, file_path, filename = resolve_file_path(resume_url)
+    token = generate_download_token(file_path)
+    site_url = frappe.utils.get_url()
+    return f"{site_url}/api/method/resume_refining.api.view_matched_resume?token={token}"
 
 @frappe.whitelist(allow_guest=True)
 def download_matched_resume(token):
-    """Download matched resume securely if the token is valid"""
-    # print(f"download_matched_resume called with token: {token}", "resume_download") # Debug log
+    """Securely serve a resume file for download if the token is valid"""
     filepath = TOKEN_MAP.get(token)
-    if not filepath:
-        # print(f"Invalid token: {token}", "resume_download") # Debug log
-        frappe.throw(("Invalid or expired link"), frappe.PermissionError)
+    if not filepath or not os.path.exists(filepath):
+        frappe.throw("Invalid or expired link", frappe.PermissionError)
 
-    # Security check: Ensure the filepath is within allowed download paths
-    if not filepath.startswith(TMP_DIR):
-        # print(f"Unauthorized path: {filepath}", "resume_download") # Debug log
-        frappe.throw(("Unauthorized path"), frappe.PermissionError)
-
+    # Security check: Ensure file is within allowed paths
     relative_path = os.path.relpath(filepath, TMP_DIR)
-    allowed_download = False
-    for allowed_path in WHITELISTED_DOWNLOAD_PATHS:
-        if relative_path.startswith(allowed_path):
-            allowed_download = True
-            break
+    if not any(relative_path.startswith(path) for path in WHITELISTED_DOWNLOAD_PATHS):
+        frappe.throw("Unauthorized folder access", frappe.PermissionError)
 
-    if not allowed_download:
-        # print(f"Unauthorized folder access for path: {relative_path}", "resume_download") # Debug log
-        frappe.throw(("Unauthorized folder access"), frappe.PermissionError)
+    with open(filepath, "rb") as f:
+        filecontent = f.read()
 
-    if os.path.exists(filepath):
-        # print(f"File exists: {filepath}", "resume_download") # Debug log
-        with open(filepath, "rb") as f:
-            filecontent = f.read()
-        filename = os.path.basename(filepath)
-        frappe.local.response.filename = filename
-        frappe.local.response.filecontent = filecontent
-        frappe.local.response.type = "download"
-        return
-
-    # print(f"File not found at path: {filepath}", "resume_download") # Debug log
-    frappe.throw(("File not found"), frappe.FileNotFoundError)
-
-
-def get_view_url(filepath):
-    """Generate a view URL with a secure token."""
-    token = generate_download_token(filepath) # Reuse token generation
-    # IMPORTANT: Use the CORRECT app name 'resume_refining' in the URL for viewing
-    view_url = f"http://demo.localhost:8000/api/method/resume_refining.api.view_matched_resume?token={token}" # Corrected URL to relative path
-    return view_url
+    filename = os.path.basename(filepath)
+    
+    # Serve file for download
+    frappe.local.response.filename = filename
+    frappe.local.response.filecontent = filecontent
+    frappe.local.response.type = "download"
+    return
 
 @frappe.whitelist(allow_guest=True)
 def view_matched_resume(token):
-    """View matched resume securely if the token is valid by returning file content"""
-    # print(f"view_matched_resume called with token: {token}", "resume_view") # Debug log
+    """Securely serve a resume file for viewing if the token is valid"""
     filepath = TOKEN_MAP.get(token)
-    if not filepath:
-        # print(f"Invalid token: {token}", "resume_view") # Debug log
-        frappe.throw(("Invalid or expired link for viewing"), frappe.PermissionError)
+    if not filepath or not os.path.exists(filepath):
+        frappe.throw("Invalid or expired link for viewing", frappe.PermissionError)
 
-    # Security check: Ensure the filepath is within allowed view paths (same as download for now)
-    if not filepath.startswith(TMP_DIR):
-        # print(f"Unauthorized path for view: {filepath}", "resume_view") # Debug log
-        frappe.throw(("Unauthorized path for viewing"), frappe.PermissionError)
-
+    # Security check: Ensure file is within allowed paths
     relative_path = os.path.relpath(filepath, TMP_DIR)
-    allowed_view = False
-    for allowed_path in WHITELISTED_DOWNLOAD_PATHS: # Reuse download whitelist for view
-        if relative_path.startswith(allowed_path):
-            allowed_view = True
-            break
+    if not any(relative_path.startswith(path) for path in WHITELISTED_DOWNLOAD_PATHS):
+        frappe.throw("Unauthorized folder access for viewing", frappe.PermissionError)
 
-    if not allowed_view:
-        # print(f"Unauthorized folder access for view path: {relative_path}", "resume_view") # Debug log
-        frappe.throw(("Unauthorized folder access for viewing"), frappe.PermissionError)
+    # Determine content type
+    content_type_map = {
+        ".pdf": "application/pdf",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".doc": "application/msword"
+    }
+    ext = os.path.splitext(filepath)[1]
+    content_type = content_type_map.get(ext, "text/plain")
 
-    if os.path.exists(filepath):
-        # print(f"File exists for view: {filepath}", "resume_view") # Debug log
-        try:
-            if filepath.endswith('.pdf'):
-                content_type = 'application/pdf'
-                with open(filepath, 'rb') as f:
-                    filecontent = f.read()
-            elif filepath.endswith('.docx') or filepath.endswith('.doc'):
-                content_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' if filepath.endswith('.docx') else 'application/msword'
-                with open(filepath, 'rb') as f:
-                    filecontent = f.read()
-            else: # Fallback to text/plain for other file types
-                content_type = 'text/plain'
-                with open(filepath, 'r') as f:
-                    filecontent = f.read() # Read as text
-        except Exception as e:
-            # print(f"Error reading file for view: {e}", "resume_view")
-            frappe.throw(("Error reading file content for viewing"), frappe.InternalServerError)
+    with open(filepath, "rb") as f:
+        filecontent = f.read()
 
-
-        filename = os.path.basename(filepath)
-
-        return {
-            'file_name': filename,
-            'file_content': frappe.utils.encode(filecontent), # Ensure content is encoded for response
-            'content_type': content_type
-        }
-
-
-    # print(f"File not found at path for view: {filepath}", "resume_view") # Debug log
-    frappe.throw(("File not found for viewing"), frappe.FileNotFoundError)
-
-
-
-# def get_all_records():
-#     data = frappe.get_all("Job Opening", fields=["job_title", "description","status"])
-
-#     return data
+    return {
+        "file_name": os.path.basename(filepath),
+        "file_content": frappe.utils.encode(filecontent),
+        "content_type": content_type,
+    }
 
 def strip_html(text):
     soup = BeautifulSoup(text, 'html.parser')
-    return soup.get_text()
+    
+    # Replace block elements with new lines
+    for tag in soup.find_all(['p', 'br', 'div', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']):
+        tag.insert_before('\n')
+    
+    # Get plain text and normalize spaces
+    return ' '.join(soup.get_text().split())
 
 # def get_open_jobbs():
 #     open_job = []
@@ -187,6 +139,44 @@ def get_all_records():
     except Exception as e:
         frappe.throw(f"Error fetching job openings: {str(e)}")
 
+def get_applicant_files():
+    """
+    Fetches resume file paths (public & private) for all applicants.
+    Returns a list of objects with file details, including filename.
+    """
+    applicants = get_job_applicants()  # Ensure this function returns valid applicants
+    if isinstance(applicants, str):
+        return applicants  # If no applicants found, return the error message
+    files_data = []
+    for applicant in applicants:
+        resume_url = applicant.get("resume_attachment")  # Assuming 'resume_attachment' holds the file URL
+        if not resume_url:
+            continue  # Skip if no file is attached
+
+        # Extract filename from the resume URL
+        filename = os.path.basename(resume_url)
+        
+        # Determine file storage type (public/private)
+        if resume_url.startswith("/private/files/"):
+            file_type = "private"
+            file_path = frappe.get_site_path("private", "files", filename)
+        else:
+            file_type = "public"
+            file_path = frappe.get_site_path("public", "files", filename)
+
+        # Construct file object with filename included
+        file_object = {
+            "applicant_name": applicant.get("applicant_name"),
+            "email": applicant.get("email_id"),
+            "file_type": file_type,
+            "file_url": resume_url,  # Relative URL
+            "file_path": file_path,  # Absolute system path
+            "filename": filename  # Added filename
+        }
+
+        files_data.append(file_object)
+
+    return files_data
 
 @frappe.whitelist(allow_guest=True)
 def get_job_applicants():
@@ -202,69 +192,22 @@ def get_job_applicants():
 
 # edited
 
-@frappe.whitelist(allow_guest =True)
+@frappe.whitelist(allow_guest=True)
 def process_resumes():
     """
     Frappe version of the process_resumes API
     """
-    try:
-        # Ensure the directories exist, if not, create them
-        if not os.path.exists(TEMP_DIR):
-            os.makedirs(TEMP_DIR)
-            # frappe.msgprint(f"Created directory: {TEMP_DIR}")
-
-        if not os.path.exists(TEMP_RESUME_DIR):
-            os.makedirs(TEMP_RESUME_DIR)
-            # frappe.msgprint(f"Created directory: {TEMP_RESUME_DIR}")
-
-        if not os.path.exists(PERFECT_MATCH_DIR):
-            os.makedirs(PERFECT_MATCH_DIR)
-            # frappe.msgprint(f"Created directory for perfect matches: {PERFECT_MATCH_DIR}")
-
-        if not os.path.exists(TOP_MATCH_DIR):
-            os.makedirs(TOP_MATCH_DIR)
-            # frappe.msgprint(f"Created directory for top matches: {TOP_MATCH_DIR}")
-    except Exception as e:
-        frappe.throw(f"Error creating directories: {str(e)}")
-    
    
-        
-    # job_Data = get_all_records()
-    # Retrieve files and text from the request
-    # jd_job_title = frappe.local.form_dict.get('jd_job_title')  # Job title
-    jd_file = frappe.request.files.get('jd_file')  # Job description file (single)
+    jd_job_title = frappe.local.form_dict.get('job_title_select')  # Job title
+    # jd_file = frappe.request.files.get('jd_file')  # Job description file (single)
     jd_text = frappe.local.form_dict.get('jd_text')  # Job description text
-    resumes_files = frappe.request.files.getlist('resumes_files')  # Multiple resume files
-    # for i in job_Data:
-    #     if i.job_
-
-    # frappe.local.response.headers['Access-Control-Allow-Origin'] = '*'  # Allow all origins
-    # frappe.local.response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'  # Allowed methods
-    # frappe.local.response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'  # Allowed headers
-
+    resumes_files = get_applicant_files()  # Multiple resume files
+  
     if frappe.request.method == "OPTIONS":
         frappe.local.response.headers['Access-Control-Allow-Origin'] = '*'  # Or specify allowed origins
         frappe.local.response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
         frappe.local.response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Frappe-CSRF-Token'
         return {}
-    
-    # jd_data = get_all_records()
-    # print("JD Data", jd_data)
-    
-    # for i in jd_data:
-    #     if i.status == "Open" and i.job_title == jd_job_title:
-    #         cleaned_jd_text = clean_html(i.description)
-    
-    # Validation for input
-    # if not jd_text and not jd_file:
-    #     return {'Error': '"Job description text or file is required"'}
-    # if jd_text and jd_file:
-    #     return {'Error': "Cannot send both Job Description text and file. Choose only one."}
-    # if not resumes_files:
-    #     return {'Error': '"Resume files are required"'}
-
-    # Parse job description (text or file)
-
 
     try:
         if jd_text:
@@ -272,43 +215,44 @@ def process_resumes():
     except Exception as e:
         return {'Error': f"Failed to parse job description: {str(e)}"}
 
-    # print(f"Job Description Experience: {jd_parsed['experience']}")
-    # print(f"Job Description Required Skills: {jd_parsed['jd_required_skills']}")
-
     resume_scores = []
     # print("###################################")
-    # print("empty resume Scores", resume_scores)
+    # print("empty resume scores", resume_scores)
     # print("###################################")
 
     for resume_file in resumes_files:
-        if not allowed_file(resume_file.filename):
+        if not allowed_file(resume_file['filename']):
             continue
 
-        resume_path = os.path.join(TEMP_RESUME_DIR, resume_file.filename)
-        resume_file.save(resume_path)
+        resume_path = resume_file['filename']
+        # resume_file.save(resume_path)
 
         try:
             resume_parsed = parse_resume(resume_path)
-            print(f"Resume Name: {resume_file.filename}")
-            print(f"Parsed Skills: {resume_parsed.get('resume_skills', [])}")
+            # print(resume_parsed)
+            print(f"Resume Name: {resume_file['filename']}")
+            print(f"Parsed Resume Skills: {resume_parsed.get('resume_skills', [])}")
 
             score = score_resume(jd_parsed, resume_parsed)
             percentage_score = score * 100
-            print(f"Resume Score: {percentage_score:.2f}%")
+            print(f"Resume score: {percentage_score:.2f}%")
 
             experience_years = resume_parsed.get('total_experience', 0)
             resume_scores.append({
-                'Resume_Name': resume_file.filename,
-                'Score': f"{percentage_score:.2f}%",
+                'applicant_name': resume_file['applicant_name'],
+                'resume_name': resume_file['filename'],
+                'score': f"{percentage_score:.2f}%",
                 'experience_years': experience_years,
-                'resume_skills': resume_parsed.get('resume_skills', [])
+                'resume_skills': resume_parsed.get('resume_skills', []),
 
             })
+            
+        
             # print("###################################")
-            # print("resume Scores", resume_scores)
+            # print("resume scores", resume_scores)
             # print("###################################")
         except Exception as e:
-            print(f"Error processing resume {resume_file.filename}: {e}")
+            print(f"Error processing resume {resume_file['filename']}: {e}")
             continue
 
     experience_range = jd_parsed.get('experience', [])
@@ -335,37 +279,29 @@ def process_resumes():
     }
 
     for resume in filtered_resumes:
-        score = float(resume['Score'].strip('%'))
+        score = float(resume['score'].strip('%'))
         if score >= 80:
-            resume_data = save_perfect_match(resume) # Get both URLs
+            # resume_data = save_perfect_match(resume, jd_job_title) # Get both URLs
             resume['file_url'] = resume_data['file_url']
             resume['view_url'] = resume_data['view_url']
             matched_resumes["PerfectMatched"].append(resume)
         elif 70 <= score < 80:
-            resume_data = save_top_match(resume) # Get both URLs
+            # resume_data = save_perfect_match(resume, jd_job_title) # Get both URLs
             resume['file_url'] = resume_data['file_url']
             resume['view_url'] = resume_data['view_url']
             matched_resumes["TopMatched"].append(resume)
         elif 60 <= score < 70:
+            #  resume_data = save_perfect_match(resume, jd_job_title)
             matched_resumes["GoodMatched"].append(resume)
         elif 50 <= score < 60:
             matched_resumes["PoorMatched"].append(resume)
         elif score < 50:
             matched_resumes["NotGood"].append(resume)
 
-    try:
-        shutil.rmtree(TEMP_DIR, ignore_errors=True)
-        shutil.rmtree(TEMP_RESUME_DIR, ignore_errors=True)
-    except Exception as e:
-        return {'Error': f"Failed to clear temporary files: {str(e)}"}
-
-    # print("###################################")
-    # print("match Scores", matched_resumes)
-    # print("###################################")
 
     jd_required_skills = jd_parsed['jd_required_skills']
-
-
+    resume_data = save_shortlisted_candidates(matched_resumes, jd_job_title, jd_required_skills)
+    print(resume_data)
     return {
         'Matched_Resumes': matched_resumes,
         'jd_required_skills': jd_required_skills
@@ -375,42 +311,128 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-def save_perfect_match(resume):
-    """
-    Save perfectly matched resumes to the local directory and return download and view URLs.
-    """
-    resume_name = resume['resume_name']
-    source_path = os.path.join(TEMP_RESUME_DIR, resume_name)
-    destination_path = os.path.join(PERFECT_MATCH_DIR, resume_name)
+# @frappe.whitelist()
+# def save_shortlisted_candidates(candidate_score_list, job_opening, jd_required_skills):
+#     """
+#     Save shortlisted candidates to the 'Shortlisted Candidates' doctype.
+    
+#     :param job_opening: Job title for filtering job applicants.
+#     :param candidate_score_list: List of shortlisted candidates with scores and details.
+#     :param jd_required_skills: List of required skills for the job.
+#     :return: Success or error message.
+#     """
+#     if not job_opening or not candidate_score_list:
+#         return {"status": "error", "message": "Job Opening and Candidate Score List are required."}
 
-    if os.path.exists(source_path):
-        shutil.copy(source_path, destination_path)
+#     # Initialize shortlisted candidates list
+#     shortlisted_candidates = []
+#     # Define the categories to be saved
+#     allowed_categories = ["PerfectMatched", "TopMatched", "GoodMatched","PoorMatched","NotGood"]
 
-    download_url = get_download_url(destination_path)
-    view_url = get_view_url(destination_path)      # New view URL
+#     # Iterate through the candidate_score_list and filter only required matches
+#     for category in allowed_categories:
+#         if category in candidate_score_list:
+#             for candidate in candidate_score_list[category]:
+#                 job_applicant = frappe.db.get_value("Job Applicant", {"applicant_name": candidate["applicant_name"]}, "name")
 
-    return { # Return both URLs
-        'file_url': download_url,
-        'view_url': view_url
-    }
+#                 if job_applicant:
+#                     shortlisted_candidates.append({
+#                         "job_applicant": job_applicant,
+#                         "resume_name": candidate["resume_name"],
+#                         "experience_year": candidate["experience_years"],
+#                         "skills_count": candidate["matched_count"],
+#                         "matched_skills": ", ".join(candidate["matched_skills"]),
+#                         "score": candidate["score"]
+#                     })
 
-def save_top_match(resume):
-    """
-    Save top matched resumes to the local directory and return download and view URLs.
-    """
-    resume_name = resume['resume_name']
-    source_path = os.path.join(TEMP_RESUME_DIR, resume_name)
-    destination_path = os.path.join(TOP_MATCH_DIR, resume_name)
+#     # Check if there are shortlisted candidates
+#     if not shortlisted_candidates:
+#         return {"status": "error", "message": "No valid candidates found for shortlisting."}
 
-    if os.path.exists(source_path):
-        shutil.copy(source_path, destination_path)
+#     # Create new Shortlisted Candidates record in Frappe
+#     shortlisted_doc = frappe.get_doc({
+#         "doctype": "Shortlisted Candidates",
+#         "job_opening": job_opening,
+#         "candidate_score_list": shortlisted_candidates,
+#         "jd_required_skills": ", ".join(jd_required_skills)
+#     })
+#     print(f"---------------------------{shortlisted_doc}---------------{shortlisted_candidates}")
+#     shortlisted_doc.insert(ignore_permissions=True)
+#     frappe.db.commit()
 
-    download_url = get_download_url(destination_path)
-    view_url = get_view_url(destination_path)      # New view URL
-    return { # Return both URLs
-        'file_url': download_url,
-        'view_url': view_url
-    }
+#     return {"status": "success", "message": "Shortlisted candidates saved successfully."}
+
+
+@frappe.whitelist()
+def save_shortlisted_candidates(candidate_score_list, job_opening, jd_required_skills):
+    
+    if not job_opening or not candidate_score_list:
+        return {"status": "error", "message": "Job Opening and Candidate Score List are required."}
+
+    # Check if job opening exists
+    job_opening_id = frappe.db.get_value("Job Opening", {"job_title": job_opening, "status": "Open"}, "name")
+    
+    if not job_opening_id:
+        return {"status": "error", "message": f"Job Opening '{job_opening}' not found or not open."}
+
+    # Initialize shortlisted candidates list
+    shortlisted_candidates = []
+
+    # Define the categories to be saved
+    allowed_categories = ["PerfectMatched", "TopMatched", "GoodMatched", "PoorMatched", "NotGood"]
+
+    # Iterate through the candidate_score_list and filter only required matches
+    for category in allowed_categories:
+        if category in candidate_score_list:
+            for candidate in candidate_score_list[category]:
+                job_applicant = frappe.db.get_value("Job Applicant", {"applicant_name": candidate["applicant_name"]}, "name")
+
+                if job_applicant:
+                    shortlisted_candidates.append({
+                        "job_applicant": job_applicant,
+                        "resume_name": candidate["resume_name"],
+                        "experience_year": candidate["experience_years"],
+                        "skills_count": candidate["matched_count"],
+                        "matched_skills": ", ".join(candidate["matched_skills"]),
+                        "score": candidate["score"]
+                    })
+
+    # Check if there are shortlisted candidates
+    if not shortlisted_candidates:
+        return {"status": "error", "message": "No valid candidates found for shortlisting."}
+
+    # Create new Shortlisted Candidates record in Frappe
+    shortlisted_doc = frappe.get_doc({
+        "doctype": "Shortlisted Candidates",
+        "job_opening": job_opening_id,  # Use Job Opening ID instead of title
+        "candidate_score_list": shortlisted_candidates,
+        "jd_required_skills": ", ".join(jd_required_skills)
+    })
+
+
+    shortlisted_doc.insert(ignore_permissions=True)
+    frappe.db.commit()
+
+    return {"status": "success", "message": "Shortlisted candidates saved successfully."}
+
+
+# def save_top_match(resume):
+#     """
+#     Save top matched resumes to the local directory and return download and view URLs.
+#     """
+#     resume_name = resume['resume_name']
+#     source_path = os.path.join(TEMP_RESUME_DIR, resume_name)
+#     destination_path = os.path.join(TOP_MATCH_DIR, resume_name)
+
+#     if os.path.exists(source_path):
+#         shutil.copy(source_path, destination_path)
+
+#     download_url = get_download_url(destination_path)
+#     view_url = get_view_url(destination_path)      # New view URL
+#     return { # Return both URLs
+#         'file_url': download_url,
+#         'view_url': view_url
+#     }
 
 
 
@@ -444,13 +466,33 @@ def extract_experience(text):
 
     return extracted_experience
 
+# def extract_text_from_pdf(file_path):
+#     text = ""
+#     with open(file_path, 'rb') as file:
+#         reader = pypdf.PdfReader(file)
+#         for page_num in range(len(reader.pages)):
+#             page = reader.pages[page_num]
+#             text += page.extract_text()
+#     return text
+
 def extract_text_from_pdf(file_path):
+    """
+    Extracts text from a PDF file given its file path.
+    """
     text = ""
-    with open(file_path, 'rb') as file:
-        reader = PyPDF2.PdfReader(file)
-        for page_num in range(len(reader.pages)):
-            page = reader.pages[page_num]
-            text += page.extract_text()
+    
+    if not os.path.exists(file_path):
+        return f"File not found: {file_path}"
+
+    try:
+        with open(file_path, 'rb') as file:
+            reader = pypdf.PdfReader(file)
+            for page in reader.pages:
+                if page.extract_text():
+                    text += page.extract_text() + "\n"
+    except Exception as e:
+        return f"Error reading PDF: {str(e)}"
+
     return text
 
 def extract_text_from_docx(file_path):
@@ -552,7 +594,7 @@ def score_resume(jd_parsed, resume_parsed):
     # print('JD Embedding', jd_embedding)
     # print('Resume Embedding', resume_embedding)
     similarity_score = cosine_similarity([jd_embedding], [resume_embedding])[0][0]
-    # print('resume Score', similarity_score)
+    # print('resume score', similarity_score)
     return similarity_score
 
 def filter_resumes_by_experience(resume_scores, min_exp, max_exp, jd_required_skills):
@@ -565,11 +607,12 @@ def filter_resumes_by_experience(resume_scores, min_exp, max_exp, jd_required_sk
             total_jd_skills = len(jd_required_skills)
             list_matched_skills = list(matched_skills)
 
-            # print(f"Resume: {resume['Resume_Name']}, Matched Skills: {list_matched_skills}, Matched Count: {matched_count} out of {total_jd_skills}")
+            # print(f"Resume: {resume['resume_name']}, Matched Skills: {list_matched_skills}, Matched Count: {matched_count} out of {total_jd_skills}")
 
             filtered_resumes.append({
-                'resume_name': resume['Resume_Name'],
-                'Score': resume['Score'],
+                'applicant_name': resume['applicant_name'],
+                'resume_name': resume['resume_name'],
+                'score': resume['score'],
                 'experience_years': resume['experience_years'],
                 'matched_skills': list_matched_skills,
                 'matched_count': f'{matched_count} out of {total_jd_skills}',

@@ -1,0 +1,79 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "format:{DD}-{MM}-{YY}-{####}",
+ "creation": "2025-03-17 16:15:01.411802",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "experience",
+  "job_applicant",
+  "resume_name",
+  "experience_year",
+  "skills_count",
+  "matched_skills",
+  "score"
+ ],
+ "fields": [
+  {
+   "fieldname": "experience",
+   "fieldtype": "Column Break"
+  },
+  {
+   "columns": 2,
+   "fieldname": "job_applicant",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "Job Applicant",
+   "options": "Job Applicant",
+   "reqd": 1
+  },
+  {
+   "fieldname": "resume_name",
+   "fieldtype": "Data",
+   "label": "Resume Name"
+  },
+  {
+   "columns": 1,
+   "fieldname": "experience_year",
+   "fieldtype": "Float",
+   "in_list_view": 1,
+   "label": "Experience (Year)"
+  },
+  {
+   "columns": 1,
+   "fieldname": "skills_count",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Skills Count"
+  },
+  {
+   "columns": 2,
+   "fieldname": "matched_skills",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Matched Skills"
+  },
+  {
+   "columns": 1,
+   "fieldname": "score",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Score in Percent"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2025-03-17 18:05:53.304278",
+ "modified_by": "Administrator",
+ "module": "Resume Refining",
+ "name": "Candidate Score",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

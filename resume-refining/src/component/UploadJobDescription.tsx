@@ -357,13 +357,13 @@
 
 // frontend code
 import React, { useState, useRef, useEffect } from "react";
-import React, { useState, useRef } from "react";
 import "./uploadescription.css";
 
 type MatchedData = {
     PerfectMatched?: {
         resume_name: string;
-        Score: string;
+        applicant_name: string;
+        score: string;
         experience_years: number;
         matched_count: string;
         matched_skills: string[];
@@ -372,7 +372,8 @@ type MatchedData = {
     }[];
     TopMatched?: {
         resume_name: string;
-        Score: string;
+        applicant_name: string;
+        score: string;
         experience_years: number;
         matched_count: string;
         matched_skills: string[];
@@ -381,24 +382,33 @@ type MatchedData = {
     }[];
     GoodMatched?: {
         resume_name: string;
-        Score: string;
+        applicant_name: string;
+        score: string;
         experience_years: number;
         matched_count: string;
         matched_skills: string[];
+        file_url: string;
+        view_url: string;
     }[];
     PoorMatched?: {
         resume_name: string;
-        Score: string;
+        applicant_name: string;
+        score: string;
         experience_years: number;
         matched_count: string;
         matched_skills: string[];
+        file_url: string;
+        view_url: string;
     }[];
     NotGood?: {
         resume_name: string;
-        Score: string;
+        applicant_name: string;
+        score: string;
         experience_years: number;
         matched_count: string;
         matched_skills: string[];
+        file_url: string;
+        view_url: string;
     }[];
 };
 
@@ -518,16 +528,19 @@ const UploadjobDescription: React.FC = () => {
 
         const formData = new FormData();
         formData.append("jd_text", jdText);
-
-        if (jobDescFile) {
-            formData.append("jd_file", jobDescFile);
+        if(job_title_select){
+            formData.append('job_title_select',selectedJobTitle)
         }
 
-        selectedFiles.forEach((file) => {
-            formData.append("resumes_files", file);
-        });
+        // if (jobDescFile) {
+        //     formData.append("jd_file", jobDescFile);
+        // }
 
-        // const csrfToken = (window as any).csrf_token;
+        // selectedFiles.forEach((file) => {
+        //     formData.append("resumes_files", file);
+        // });
+
+        const csrfToken = (window as any).csrf_token;
         // console.log("CSRF Token:", csrfToken);
 
         // if (!csrfToken) {
@@ -543,7 +556,7 @@ const UploadjobDescription: React.FC = () => {
                     method: "POST",
                     credentials: "include",
                     headers: {
-                        // "X-Frappe-CSRF-Token": csrfToken,
+                        "X-Frappe-CSRF-Token": csrfToken,
                     },
                     body: formData,
                 }
@@ -734,7 +747,7 @@ const UploadjobDescription: React.FC = () => {
                             ></textarea>
                         </div>
 
-                        <div className="form-group">
+                        {/* <div className="form-group">
                             <label htmlFor="jd_file">
                                 <strong>{"Upload Job Description File (PDF/DOCX)"}</strong>
                             </label>
@@ -805,7 +818,7 @@ const UploadjobDescription: React.FC = () => {
                                     </button>
                                 </div>
                             )}
-                        </div>
+                        </div> */}
 
                         <div className="text-center">
                             <button type="submit" className="btn btn-dark" disabled={loading}>
@@ -850,6 +863,9 @@ const UploadjobDescription: React.FC = () => {
                                         <table className="table table-striped">
                                             <thead>
                                                 <tr>
+                                                    <th className="applicant-col" style={{ width: "40%" }}>
+                                                        {"Applicant Name"}
+                                                    </th>
                                                     <th className="resume-col" style={{ width: "40%" }}>
                                                         {"Resume Name"}
                                                     </th>
@@ -879,6 +895,7 @@ const UploadjobDescription: React.FC = () => {
                                             <tbody>
                                                 {matchedData.PerfectMatched.map((match, index) => (
                                                     <tr key={index}>
+                                                        <td className="applicant-col">{match.applicant_name}</td>
                                                         <td className="resume-col">
                                                             <a
                                                                 href="#"
@@ -890,7 +907,7 @@ const UploadjobDescription: React.FC = () => {
                                                                 {match.resume_name}
                                                             </a>
                                                         </td>
-                                                        <td className="score-col">{match.Score}</td>
+                                                        <td className="score-col">{match.score}</td>
                                                         <td className="experience-col">
                                                             {match.experience_years}
                                                         </td>
@@ -912,6 +929,9 @@ const UploadjobDescription: React.FC = () => {
                                     <table className="table table-striped">
                                         <thead>
                                             <tr>
+                                                <th className="applicant-col" style={{ width: "40%" }}>
+                                                        {"Applicant Name"}
+                                                </th>
                                                 <th className="resume-col" style={{ width: "40%" }}>
                                                     {"Resume Name"}
                                                 </th>
@@ -938,6 +958,7 @@ const UploadjobDescription: React.FC = () => {
                                         <tbody>
                                             {matchedData.TopMatched.map((match, index) => (
                                                 <tr key={index}>
+                                                    <td className="applicant-col">{match.applicant_name}</td>
                                                     <td className="resume-col">
                                                         <a
                                                             href="#"
@@ -950,7 +971,7 @@ const UploadjobDescription: React.FC = () => {
                                                             {match.resume_name}
                                                         </a>
                                                     </td>
-                                                    <td className="score-col">{match.Score}</td>
+                                                    <td className="score-col">{match.score}</td>
                                                     <td className="experience-col">
                                                         {match.experience_years}
                                                     </td>
@@ -980,6 +1001,9 @@ const UploadjobDescription: React.FC = () => {
                                         <table className="table table-striped">
                                             <thead>
                                                 <tr>
+                                                    <th className="applicant-col" style={{ width: "40%" }}>
+                                                        {"Applicant Name"}
+                                                    </th>
                                                     <th className="resume-col" style={{ width: "40%" }}>
                                                         {"Resume Name"}
                                                     </th>
@@ -1009,8 +1033,17 @@ const UploadjobDescription: React.FC = () => {
                                             <tbody>
                                                 {matchedData.GoodMatched.map((match, index) => (
                                                     <tr key={index}>
-                                                        <td className="resume-col">{match.resume_name}</td>
-                                                        <td className="score-col">{match.Score}</td>
+                                                        <td className="applicant-col">{match.applicant_name}</td>
+                                                        <td className="resume-col"><a
+                                                                href="#"
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    handleViewResume(match.view_url, match.resume_name);
+                                                                }}
+                                                            >
+                                                                {match.resume_name}
+                                                            </a></td>
+                                                        <td className="score-col">{match.score}</td>
                                                         <td className="experience-col">
                                                             {match.experience_years}
                                                         </td>
@@ -1033,6 +1066,9 @@ const UploadjobDescription: React.FC = () => {
                                         <table className="table table-striped">
                                             <thead>
                                                 <tr>
+                                                    <th className="applicant-col" style={{ width: "40%" }}>
+                                                        {"Applicant Name"}
+                                                    </th>
                                                     <th className="resume-col" style={{ width: "40%" }}>
                                                         {"Resume Name"}
                                                     </th>
@@ -1062,8 +1098,17 @@ const UploadjobDescription: React.FC = () => {
                                             <tbody>
                                                 {matchedData.PoorMatched.map((match, index) => (
                                                     <tr key={index}>
-                                                        <td className="resume-col">{match.resume_name}</td>
-                                                        <td className="score-col">{match.Score}</td>
+                                                        <td className="applicant-col">{match.applicant_name}</td>
+                                                        <td className="resume-col"><a
+                                                                href="#"
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    handleViewResume(match.view_url, match.resume_name);
+                                                                }}
+                                                            >
+                                                                {match.resume_name}
+                                                            </a></td>
+                                                        <td className="score-col">{match.score}</td>
                                                         <td className="experience-col">
                                                             {match.experience_years}
                                                         </td>
@@ -1086,6 +1131,9 @@ const UploadjobDescription: React.FC = () => {
                                         <table className="table table-striped">
                                             <thead>
                                                 <tr>
+                                                    <th className="applicant-col" style={{ width: "40%" }}>
+                                                        {"Applicant Name"}
+                                                    </th>
                                                     <th className="resume-col" style={{ width: "40%" }}>
                                                         {"Resume Name"}
                                                     </th>
@@ -1112,8 +1160,17 @@ const UploadjobDescription: React.FC = () => {
                                             <tbody>
                                                 {matchedData.NotGood.map((match, index) => (
                                                     <tr key={index}>
-                                                        <td className="resume-col">{match.resume_name}</td>
-                                                        <td className="score-col">{match.Score}</td>
+                                                        <td className="applicant-col">{match.applicant_name}</td>
+                                                        <td className="resume-col"><a
+                                                                href="#"
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    handleViewResume(match.view_url, match.resume_name);
+                                                                }}
+                                                            >
+                                                                {match.resume_name}
+                                                            </a></td>
+                                                        <td className="score-col">{match.score}</td>
                                                         <td className="experience-col">
                                                             {match.experience_years}
                                                         </td>
